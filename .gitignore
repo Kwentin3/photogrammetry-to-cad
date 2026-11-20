@@ -1,0 +1,41 @@
+# Учётные данные и локальные настройки
+.env
+.env.*
+!.env.example
+.secrets/
+credentials/
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Рабочие данные съёмки и вычислений; держать вне репозитория
+/data/
+/input/
+/work/
+/output/
+/runs/
+/private/
+**/MeshroomCache/
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.las
+*.laz
+*.ply
+*.pcd
+*.abc
+*.usda
+*.log
+
+# Локальное Python-окружение и кэш
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Локальные служебные файлы
+.DS_Store
+Thumbs.db

@@ -1,0 +1,274 @@
+[
+  {
+    "id": "S01",
+    "title": "Meshroom: официальные релизы",
+    "url": "https://github.com/alicevision/meshroom/releases",
+    "evidence": "Релиз 2025.1.0 отмечен Latest; отдельно опубликована nightly-сборка 2026 года. Описаны плагины и требования CUDA для бинарных сборок.",
+    "review_scope": "Страница релизов; изучены относящиеся к вопросу разделы.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S02",
+    "title": "Meshroom: узел Meshing",
+    "url": "https://meshroom-manual.readthedocs.io/en/latest/feature-documentation/nodes/Meshing.html",
+    "evidence": "Документированы fusion карт глубины, densePointCloud.abc и выход mesh. Draft использует разреженную SfM-реконструкцию.",
+    "review_scope": "Официальная документация; страница помечена v2023.1.0, параметры сверять с установленной версией.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S03",
+    "title": "Meshroom: архитектура",
+    "url": "https://meshroom.org/",
+    "evidence": "Граф узлов, инвалидация зависимых результатов, повторное использование кэша, локальное и распределённое исполнение.",
+    "review_scope": "Официальная страница проекта.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S04",
+    "title": "MMVII: официальный README",
+    "url": "https://github.com/micmac-V2/MMVII",
+    "evidence": "CLI, контейнеры, сборка и тесты. README отдельно оговаривает команды/функции, для которых ещё требуется MicMac V1.",
+    "review_scope": "Изучены README и разделы совместимости; программы не запускались.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S05",
+    "title": "MicMacRoom: статья авторов, 2026",
+    "url": "https://isprs-archives.copernicus.org/articles/XLVIII-2-W12-2026/343/2026/",
+    "evidence": "Прототип связывает MicMac и Meshroom. Описаны полный фотограмметрический процесс, ограничения интеграции и дальнейшее развитие.",
+    "review_scope": "Изучены текст PDF и страницы 4–5 визуально, включая архитектуру и ограничения.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S06",
+    "title": "mrMicMac: актуальный репозиторий",
+    "url": "https://github.com/meshroomHub/mrMicMac",
+    "evidence": "README требует Meshroom 2026+; установка через MESHROOM_PLUGINS_PATH.",
+    "review_scope": "README; совместимость на машине не проверялась.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S07",
+    "title": "MicMacRoom: историческая инструкция установки",
+    "url": "https://micmac.ensg.eu/index.php/MicMacRoom_Installation",
+    "evidence": "Инструкция для Windows указывает MicMac 1.1.1 и Meshroom 2023.3.0, другой механизм подключения узлов.",
+    "review_scope": "Официальная wiki; не переносить требования на новый mrMicMac.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S08",
+    "title": "MicMacRoom: учебный конвейер Gravillons",
+    "url": "https://micmac.ensg.eu/index.php/MicMacRoom_Tutorial%3A_01_Gravillons",
+    "evidence": "Пример с Tapas, AperiCloud и C3DC для плотного облака. Это команды классического MicMac.",
+    "review_scope": "Изучен учебный процесс; собственный прогон не проводился.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S09",
+    "title": "COLMAP: FAQ",
+    "url": "https://colmap.github.io/faq.html",
+    "evidence": "CPU-путь доступен для SfM; встроенная плотная реконструкция имеет CUDA-зависимость.",
+    "review_scope": "Официальная документация; различать sparse и dense этапы.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S10",
+    "title": "OpenMVS: сборка и Python API",
+    "url": "https://github.com/cdcseacave/openMVS/wiki/Building",
+    "evidence": "CUDA отмечена как необязательная; описаны сборки, библиотечное использование и Python API.",
+    "review_scope": "Официальная wiki; на странице дата изменения 03.11.2026.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S11",
+    "title": "OpenMVS: документированный конвейер",
+    "url": "https://github.com/cdcseacave/openMVS/wiki/Usage",
+    "evidence": "Доступны CLI и InterfaceCOLMAP; документирован готовый MvgMvsPipeline.py с выбором фронтенда.",
+    "review_scope": "Официальная wiki; наличие в конкретном релизе требует фиксации версии.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S12",
+    "title": "CGAL: Shape Detection",
+    "url": "https://doc.cgal.org/latest/Shape_detection/index.html",
+    "evidence": "Efficient RANSAC и Region Growing; примитивы, назначение точек, параметры расстояния, нормалей и связности.",
+    "review_scope": "Официальное руководство, изучены постановка и ограничения параметров.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S13",
+    "title": "CGAL: Polygonal Surface Reconstruction",
+    "url": "https://doc.cgal.org/latest/Polygonal_surface_reconstruction/index.html",
+    "evidence": "PolyFit-подобная реконструкция кусочно-плоского объекта в замкнутую manifold-сетку; ограничения сложности и предположения о плоскостях.",
+    "review_scope": "Официальное руководство. Выход — surface mesh, не готовая параметрическая история CAD.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S14",
+    "title": "CloudCompare: qRANSAC_SD",
+    "url": "https://www.cloudcompare.org/doc/wiki/index.php/RANSAC_Shape_Detection_(plugin)",
+    "evidence": "Плагин выделяет поддерживающие точки и геометрические примитивы. Это не полный автоматический экспорт инженерного тела.",
+    "review_scope": "Официальная wiki; GUI-возможности не считаются доказательством полного headless API.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S15",
+    "title": "Point2CAD: README",
+    "url": "https://github.com/prs-eth/point2cad",
+    "evidence": "Вход (x,y,z,s), отдельная сегментация; выходы unclipped, clipped, topo. В README указана CC-BY-NC 4.0.",
+    "review_scope": "README и контракт входных/выходных данных; есть расхождение с файлом LICENSE.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S16",
+    "title": "Point2CAD: файл LICENSE",
+    "url": "https://github.com/prs-eth/point2cad/blob/main/LICENSE",
+    "evidence": "В файле находится текст Apache License 2.0, что расходится с разделом лицензии README.",
+    "review_scope": "Проверен текст файла; правовой вывод о разрешённом использовании не делался.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S17",
+    "title": "CAD-Recode: страница авторов",
+    "url": "https://cad-recode.github.io/",
+    "evidence": "Облако преобразуется в Python/CadQuery-код; модель использует Qwen2-1.5B; сравнения на DeepCAD/Fusion360.",
+    "review_scope": "Изучены описание метода и таблица результатов; цифры не перенесены на архитектуру.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S18",
+    "title": "CAD-Recode: официальный репозиторий",
+    "url": "https://github.com/filaPro/cad-recode",
+    "evidence": "Доступны демонстрация, контейнерное окружение и ссылки на модели v1/v1.5; упоминаются DeepCAD, Fusion360 и CC3D.",
+    "review_scope": "README. Файл лицензии отдельно прочитать через веб-инструмент не удалось; допуска в коммерческий стек не дано.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S19",
+    "title": "ETH3D: документация",
+    "url": "https://www.eth3d.net/documentation",
+    "evidence": "Описаны исходные данные и калибровки камер; формат ориентирован на оценку геометрической реконструкции.",
+    "review_scope": "Официальная документация; не является сквозным бенчмарком CAD.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S20",
+    "title": "ETH3D: пример страницы метрик",
+    "url": "https://www.eth3d.net/result_details.php?hr_tolerance_id=4&id=1",
+    "evidence": "Метрики Accuracy, Completeness, F1, Time и выбираемый пространственный допуск.",
+    "review_scope": "Использована только структура оценки, не место конкретного алгоритма в рейтинге.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S21",
+    "title": "Fit4CAD: данные и оценка",
+    "url": "https://github.com/chiararomanengo/Fit4CAD",
+    "evidence": "225 облаков получены выборкой точек с CAD-объектов; есть код оценки.",
+    "review_scope": "Официальный репозиторий авторов. Это не 225 телефонных сканов.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S22",
+    "title": "BIMNet: страница авторов",
+    "url": "https://thucbims.github.io/bimnet/",
+    "evidence": "Реальные интерьерные сканы и IFC; геометрическая и топологическая оценка; доступ к данным зависит от условий Matterport3D.",
+    "review_scope": "Изучены описание, условия доступа и структура оценки.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S23",
+    "title": "VERTICAL/P2M: реконструкция 3D-тел помещений, 2025",
+    "url": "https://www.mdpi.com/2220-9964/14/11/429",
+    "evidence": "Полуавтоматический процесс: подготовленные LiDAR-облака, плоскости, mesh, оптимизация, CAD-тела; данные закрыты.",
+    "review_scope": "Изучены методика, ограничения входа, результаты, участие оператора и Data Availability.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S24",
+    "title": "Сравнение открытых фотограмметрических конвейеров, 2019",
+    "url": "https://isprs-archives.copernicus.org/articles/XLII-2-W17/331/2019/",
+    "evidence": "Сравниваются COLMAP, OpenMVG/OpenMVS и AliceVision на задачах 3D-реконструкции.",
+    "review_scope": "Проверены публикация и описание исследования; численные таблицы в выводы не включены.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S25",
+    "title": "Learning-based 3D CAD model generation in mechanical engineering: A survey, 2026",
+    "url": "https://doi.org/10.1016/j.aei.2026.104990",
+    "evidence": "Обзор 78 работ по механическим CAD-моделям. По доступному тексту архитектурные задачи исключены из охвата.",
+    "review_scope": "Проверены метаданные и доступные индексируемые фрагменты. Полный текст через издателя недоступен; не используется для детального рейтинга.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S26",
+    "title": "A Survey on Deep Learning in 3D CAD Reconstruction, 2025",
+    "url": "https://www.mdpi.com/2076-3417/15/12/6681",
+    "evidence": "Систематизация представлений CAD, методов реконструкции, датасетов и метрик.",
+    "review_scope": "Изучены основные разделы полного HTML-текста; не заявляется проверка всех цитируемых авторами работ.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S27",
+    "title": "Historic England: Photogrammetric Applications for Cultural Heritage, 2017",
+    "url": "https://historicengland.org.uk/images-books/publications/photogrammetric-applications-for-cultural-heritage/",
+    "evidence": "Руководство по SfM, съёмке, масштабу и контролю качества; раздел 2.3 различает контрольные и независимые проверочные точки.",
+    "review_scope": "Изучены описание и относящиеся к задаче разделы PDF, особенно Control. Не источник текущих версий программ.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S28",
+    "title": "BricsCAD: POINTCLOUDFITPLANAR",
+    "url": "https://helpcenter.bricsys.com/en-us/document/command-reference/p/pointcloudfitplanar-command?version=V26",
+    "evidence": "Из точек вокруг заданного seed создаются плоская поверхность или тело; описаны допуск, контур, поиск параллельной грани.",
+    "review_scope": "Официальная документация команды; автономное исполнение без оператора не проверялось.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S29",
+    "title": "Geomagic Design X: страница производителя",
+    "url": "https://hexagon.com/products/geomagic-design-x",
+    "evidence": "Производитель предлагает преобразование сканов в редактируемые feature-based CAD-модели.",
+    "review_scope": "Подтверждение существования продуктового класса; не независимый бенчмарк и не доказательство автономности.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S30",
+    "title": "CADFit: Precise Mesh-to-CAD Program Generation with Hybrid Optimization, 2026",
+    "url": "https://arxiv.org/abs/2605.01171",
+    "evidence": "Работа описывает восстановление редактируемых операций из mesh, включая extrusion, revolution, fillet и chamfer.",
+    "review_scope": "Препринт/исследовательская публикация; рассмотрены постановка и заявленные результаты, без воспроизведения.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S31",
+    "title": "OpenMVS: архитектура и CUDA-флаги",
+    "url": "https://github.com/cdcseacave/openMVS/blob/develop/docs/architecture.md",
+    "evidence": "CUDA описана как опциональное ускорение. Документация ветки develop может отличаться от стабильных релизов.",
+    "review_scope": "Официальный репозиторий, архитектурная документация; не обещание идентичности всех сборок.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S32",
+    "title": "Open CASCADE: BRepCheck_Analyzer",
+    "url": "https://www.occt3d.com/dev/doc/refman/html/class_b_rep_check___analyzer.html",
+    "evidence": "Проверки допустимости B-Rep и компонентов геометрии.",
+    "review_scope": "Официальный справочник; валидность CAD не равна точности относительно реального объекта.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S33",
+    "title": "Meshroom: командная строка",
+    "url": "https://meshroom-manual.readthedocs.io/en/latest/feature-documentation/cmd/photogrammetry.html",
+    "evidence": "meshroom_batch, пользовательский граф, переопределение параметров и папка кэша.",
+    "review_scope": "Документация помечена v2023.1.0; фактический --help установленной сборки приоритетнее старых примеров.",
+    "accessed": "2026-11-11"
+  },
+  {
+    "id": "S34",
+    "title": "Meshroom: требования",
+    "url": "https://meshroom-manual.readthedocs.io/en/latest/first-steps/install/requirements.html",
+    "evidence": "Штатный MVS-путь требует NVIDIA/CUDA; CPU draft — отдельный ограниченный режим.",
+    "review_scope": "Старая версия руководства: порог compute capability не переносится на новые релизы; см. S01.",
+    "accessed": "2026-11-11"
+  }
+]
