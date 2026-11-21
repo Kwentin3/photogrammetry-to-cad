@@ -1,10 +1,10 @@
 # Источники и пределы проверки
 
-Базовые источники проверены **20 ноября 2026 года**; источники фактической реализации S16–S21 добавлены **21 ноября**. Реальные фотографии и дополнительная виртуальная шкала прошли технический маршрут до CAD; [сквозная приёмка](reports/2026-11-21/technical-run.md) завершена. Точность собственной съёмки этим не подтверждается. Текущее состояние и доказательства собраны в единственной [записи Goal #2](goal-2.md).
+Базовые источники проверены **20 ноября 2026 года**; источники реализации и обновления S16–S24 добавлены **21 ноября**. Основной комплект этой поставки — закреплённая 2026: native/backup проверены, GPU удалена, CAD новых облаков и STEP/пересборка выполнены; [отчёт](reports/2026-11-21/meshroom-2026.md), [модели](../examples/goal-4/README.md), [runbook](runbook.md). Приёмка и публикация учитываются только в [Goal #4](goal-4.md). Исторические [отчёт Goal #2](reports/2026-11-21/technical-run.md) и [модели](../examples/goal-2/README.md) сохраняются. Точность собственной съёмки этими опытами не подтверждается.
 
 Выбор стека и KISS-границы — договорённости проекта, а не вывод о победителе бенчмарков. Публикация функции в документации не подтверждает её наличие в произвольной сборке. `stable`, `latest` и ветки разработки изменяемы; перед запуском фиксируются фактические версии.
 
-**S01–S21 ниже относятся к актуальным документам проекта.** Архивный отчёт имеет свой независимый реестр S01–S34 за 11 ноября; номера между ними не сопоставляются. Источники Open3D и адресных резервов добавлены после [ревью #1](https://github.com/Kwentin3/photogrammetry-to-cad/issues/1), Codex и управления Vast.ai — после выбора исполнителя пилота.
+**S01–S24 ниже относятся к документам проекта.** Версионные S16/S18/S21 описывают сохранённую базу 2023.3; S22–S24 — обновление 2026. Архивный отчёт имеет свой независимый реестр S01–S34 за 11 ноября; номера между ними не сопоставляются. Источники Open3D и адресных резервов добавлены после [ревью #1](https://github.com/Kwentin3/photogrammetry-to-cad/issues/1), Codex и управления Vast.ai — после выбора исполнителя пилота.
 
 ## S01. Отбор кадров
 
@@ -27,7 +27,7 @@ FFmpeg документирует извлечение изображений и
 
 Подтверждают штатный процесс, CLI и CUDA-зависимость выбранного плотного этапа. Для опубликованного релиза 2025.1.0 указаны CUDA 12 и compute capability от 5.0; это пример версионных требований, не уже выбранная/установленная сборка нашего проекта. Старые минимумы из manual нельзя смешивать с новыми пакетами.
 
-NVIDIA описывает роль совместимого cubin и PTX в запуске на новой архитектуре. Поэтому общего запрета RTX 50xx не вводим; проверяем конкретную сборку реальным вычислением DepthMap. Квалификация пилотной сборки описана в S16; RTX 50xx в этом опыте не проверялась.
+NVIDIA описывает роль совместимого cubin и PTX в запуске на новой архитектуре. Поэтому общего запрета RTX 50xx не вводим; проверяем конкретную сборку реальным вычислением DepthMap. Квалификация базы описана в S16, основного комплекта 2026 — в S22; RTX 50xx в этих опытах не проверялась.
 
 ## S03. Плотный результат Meshing
 
@@ -86,7 +86,7 @@ NVIDIA описывает роль совместимого cubin и PTX в за
 - [Templates](https://docs.vast.ai/guides/templates/introduction).
 - [Docker Execution Environment](https://docs.vast.ai/guides/instances/docker-environment).
 
-Подтверждают штатные шаблоны, особенности entrypoint/onstart и выделения ресурсов. Фактическая квалификация runtime — S16. Упоминание RTX 3090/4090 и 32–64 ГБ RAM — стартовый ориентир проекта, не гарантия достаточности.
+Подтверждают штатные шаблоны, особенности entrypoint/onstart и выделения ресурсов. Квалификация базы — S16, основного комплекта 2026 — S22. Упоминание RTX 3090/4090 и 32–64 ГБ RAM — стартовый ориентир проекта, не гарантия достаточности.
 
 ## S11. Vast.ai: файлы и жизненный цикл
 
@@ -108,7 +108,7 @@ NVIDIA описывает роль совместимого cubin и PTX в за
 - [Point cloud: plane segmentation](https://www.open3d.org/docs/release/tutorial/geometry/pointcloud.html#Plane-segmentation).
 - [Point cloud outlier removal](https://www.open3d.org/docs/release/tutorial/geometry/pointcloud_outlier_removal.html).
 
-Документируют готовые операции над облаком, фильтрацию и `segment_plane`: коэффициенты плоскости и индексы поддерживающих точек. `scripts/extract_plane.py` уже связывает эти операции с явным ROI, поддерживающим облаком, выпуклым контуром и JSON для CAD; автоматического распознавания отдельной детали нет. В Windows/Python 3.11.9 с Open3D 0.20.0 мост проверен на фактических Dice и synthetic MVS входах до STEP. Для Dice единицы номинальные, метрический перенос проверен только на виртуальной базе synthetic; физическая точность собственной съёмки не установлена. Версии и результаты привязаны к lock и техническому отчёту.
+Документируют готовые операции над облаком, фильтрацию и `segment_plane`: коэффициенты плоскости и индексы поддерживающих точек. `scripts/extract_plane.py` связывает их с явным ROI, поддерживающим облаком, выпуклым контуром и JSON для CAD; автоматического распознавания отдельной детали нет. Мост проверен до STEP на новых Dice/synthetic облаках 2026 и ранее в Goal #2 на Windows/Python 3.11.9 с Open3D 0.20.0. Source SHA, положение/наклон/контур и параметры пересборки сохраняются в примерах/отчёте. Для Dice единицы номинальные, метрический перенос проверен только на виртуальной базе synthetic; физическая точность собственной съёмки не установлена.
 
 ## S14. Нативные маски и резервные нейросетевые компоненты
 
@@ -126,7 +126,7 @@ NVIDIA описывает роль совместимого cubin и PTX в за
 
 Подтверждают работу Codex с локальным репозиторием и терминальными инструментами, настройки разрешений и использование AGENTS.md. В доступном окружении дополнительно прочитаны `codex --version` и `codex --help` (CLI 0.169.0); это не выбор обязательной версии и не проверка доступа к Vast.ai с машины владельца. Решение сначала использовать Codex, а перенос в Hermes рассмотреть позже — договорённость проекта. Сравнение надёжности двух агентов здесь не проводилось.
 
-## S16. Закреплённый runtime пилота
+## S16. Сохранённый runtime пилота 2023.3
 
 - [Meshroom 2023.3.0, официальный релиз](https://github.com/alicevision/Meshroom/releases/tag/v2023.3.0).
 - [Linux-архив релиза](https://github.com/alicevision/Meshroom/releases/download/v2023.3.0/Meshroom-2023.3.0-linux.tar.gz).
@@ -139,9 +139,9 @@ NVIDIA описывает роль совместимого cubin и PTX в за
 - [vast-cli 1.11.2: операции инстансов](https://github.com/vast-ai/vast-cli/blob/v1.11.2/vastai/api/instances.py), [HTTP-клиент](https://github.com/vast-ai/vast-cli/blob/v1.11.2/vastai/api/client.py).
 - [Создание инстанса](https://docs.vast.ai/cli/reference/create-instance), [оплата](https://docs.vast.ai/guides/reference/billing), [ключ контейнера](https://docs.vast.ai/guides/instances/docker-environment).
 
-Фактически работает `/api/v1/instances/`; старый список v0 вернул `deprecated_endpoint`. Нативный `stop` использует PUT `/api/v0/instances/{id}/`. Штатного предела общей суммы/TTL у create нет. Сторож использует только per-instance ключ и запущен; его ожидание не доказывает остановку. Он сохраняет данные и платный диск, зависит от работоспособности ноды и не гарантирует бюджет. Выгрузка, контроль SHA256 и проверка destroy остаются отдельной приёмкой.
+Фактически работает `/api/v1/instances/`; старый список v0 вернул `deprecated_endpoint`. Нативный `stop` использует PUT `/api/v0/instances/{id}/`. Штатного предела общей суммы/TTL у create нет. Per-instance watchdog действительно остановил ноду в Goal #2; ожидание другого watchdog само этого не доказывает. Он сохраняет платный диск и зависит от ноды/API, поэтому не гарантирует бюджет. Выгрузка/SHA и внешняя проверка destroy отдельны. В Goal #4 проверены backup и удаление обеих аренд; приватные invoice-записи дали $0.371 с округлением $0.001.
 
-## S18. Инициализация графа и перенос масштаба
+## S18. Инициализация графа и перенос масштаба в базе 2023.3
 
 - [meshroom_batch 2023.3.0](https://github.com/alicevision/Meshroom/blob/v2023.3.0/bin/meshroom_batch), [CameraInit](https://github.com/alicevision/Meshroom/blob/v2023.3.0/meshroom/nodes/aliceVision/CameraInit.py).
 - [Graph.load и проверка UID](https://github.com/alicevision/Meshroom/blob/v2023.3.0/meshroom/core/graph.py), [SfMTransform](https://github.com/alicevision/AliceVision/blob/v3.2.0/src/software/utils/main_sfmTransform.cpp).
@@ -163,12 +163,37 @@ NVIDIA описывает роль совместимого cubin и PTX в за
 
 Штатное руководство предлагает Minimal 2D Motion=2 px и маски в FeatureExtraction и PrepareDenseScene. В обсуждении есть личные сообщения об успешных и неуспешных опытах, зависимости от фона, бликов и текстуры. Это опыт сообщества, не сравнительный бенчмарк и не основание менять выбранный стек. Настройка и маски применяются к конкретной наблюдаемой проблеме.
 
-## S21. Helper points и содержимое плотного облака
+## S21. Helper points и содержимое плотного облака в базе 2023.3
 
 - [Meshing 2023.3.0: параметры и UID](https://github.com/alicevision/Meshroom/blob/v2023.3.0/meshroom/nodes/aliceVision/Meshing.py).
 - [AliceVision 3.2.0: экспорт облака](https://github.com/alicevision/AliceVision/blob/v3.2.0/src/software/pipeline/main_meshing.cpp), [обработка сетки](https://github.com/alicevision/AliceVision/blob/v3.2.0/src/aliceVision/mesh/meshPostProcessing.cpp).
 
 `saveRawDensePointCloud=true` сохраняет облако до graph cut, удаляя точки без наблюдений; флаг имеет `uid=[]` и сам не инвалидирует кэш. `maxNbConnectedHelperPoints=0` штатно исключает helper-точки поверхности. Раздутые границы наблюдались у отклонённых диагностических результатов; финальное принятое облако получено штатной маской серого фона. Вклад helper/remap не установлен. Подгонка границы под известный размер не является проверкой точности.
+
+## S22. Закреплённый готовый runtime 2026 и основания обновления
+
+- [Meshroom pin b12ea88](https://github.com/alicevision/Meshroom/tree/b12ea8896e7e95cc9911b4ec39c272914e4da726), [AliceVision pin d012d05](https://github.com/alicevision/AliceVision/tree/d012d05589b528dcf57a2a0c805c0a5709df8613).
+- [Nightly publication/retention на pin](https://github.com/alicevision/Meshroom/blob/b12ea8896e7e95cc9911b4ec39c272914e4da726/.github/scripts/nightly-publish.sh), [готовая Linux-сборка AV](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/.github/workflows/build-linux.yml).
+- [DepthMap fixes #2240](https://github.com/alicevision/AliceVision/pull/2240), [reproducibility fixes #2226](https://github.com/alicevision/AliceVision/pull/2226), [Graph inputs/API #3164](https://github.com/alicevision/Meshroom/pull/3164).
+
+Оба AV исправления входят в выбранный комплект; это основание обновления, не доказательство проявления старой ошибки в Goal #2. MR API позволяет работать с штатными входами графа, но не требует нового оркестратора. Полный архив 600156630 байт сохранён до аренды; SHA256 `4ca3cfb0898b8000def4e68d513468a199b948329b63cdb6b257e427d295163b` совпал с asset digest. CUDA12.8/Ubuntu24.04 image закреплён в [runtime lock](../configs/runtime-2026.json). Native библиотеки/Graph strict reload 20/50/10, CCTag и CUDA/MVS проверены. Legacy-template сохраняет ограниченную прежнюю топологию; новые нейросетевые object pipelines не нужны. Исправленная 2023.3 остаётся [Git-рецептом f317](https://github.com/Kwentin3/photogrammetry-to-cad/blob/f3173b3fdfe27f7e760b84e23f6845b11a937b65/docs/runbook.md), не матрицей версий.
+
+## S23. Native Graph, PDS и USD в выбранной 2026
+
+- [Graph API на MR pin](https://github.com/alicevision/Meshroom/blob/b12ea8896e7e95cc9911b4ec39c272914e4da726/meshroom/core/graph.py).
+- [Исходники выбранного AV](https://github.com/alicevision/AliceVision/tree/d012d05589b528dcf57a2a0c805c0a5709df8613), [проектный PDS helper](../scripts/prepare_dense_images.py), [graph helper](../scripts/prepare_graphs_2026.py).
+
+Graph API владеет рёбрами, aliases и UID; linked settings сверяются с владельцем. Native SfMTransform стоит до PDS, все четыре dense alias ведут к transformed USDA. При zero chunks Dice PDS мог вернуть SUCCESS без EXR: helper вызывает native NodeChunk/buildCommandLine/runtimeEnv whole-scene, не пишет граф/статус и не патчит ядро. Synthetic использует проверенный отдельный native compute. Удалить helper после проверки исправленного native planning на новом pin. Официальные launcher paths и bundled Python3.11 обязательны после env; системный3.12 несовместим с frozen stdlib.
+
+Raw USDA ссылается на `*_landmarks.usdc`; нужен весь UID-каталог. AV native JSON/PLY сохраняет принятые координатные соглашения, ручной USD-parser/generic viewer их не заменяет. Для JSON явно нужны `sift,cctag3`, для dense PLY — `unknown` без camera exports. USD writer/loader AV не объявляет/не читает stage units: synthetic ±50 → numeric100 → PLY → Open3D0.001 → CADмм есть соглашение приложения, не измеренная физическая шкала реальных фото. Source SHA и фактические native команды проверяются отдельно от расширения файла.
+
+## S24. Параллельная передача готовыми инструментами
+
+- [aria2: официальный CLI](https://aria2.github.io/manual/en/html/aria2c.html).
+- [rclone multi-thread streams](https://rclone.org/docs/#multi-thread-streams), [SFTP и проверка host keys](https://rclone.org/sftp/).
+- [rclone stable v1.76.0](https://github.com/rclone/rclone/releases/tag/v1.76.0), [реализация SFTP на том же tag](https://github.com/rclone/rclone/blob/v1.76.0/backend/sftp/sftp.go#L396).
+
+Публичный runtime загружен 16 HTTP-сегментами, фото — 8 задачами с manifest URL/SHA. Rclone1.76.0 проверен на32MiB в обе стороны с8 фактическими SSH-соединениями и совпавшими SHA. SFTP upload требует `--sftp-multithread-upload`; один `--sftp-concurrency` не означает несколько соединений. Явные key_file/known_hosts_file и доверенный ssh-ed25519 сохраняют host trust. Приватные конфиги и executable вне Git; большие передачи по решению владельца только параллельные. Backup Goal #4 проверен до удаления GPU, включая1013 файлов и9USDC; CAD новых данных выполнен после удаления, статус приёмки/публикации — только Goal #4.
 
 ## Как обновлять этот список
 

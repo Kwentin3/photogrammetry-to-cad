@@ -1,0 +1,33 @@
+{
+  "valid": true,
+  "solids": 1,
+  "volume_mm3": 377161.72410419915,
+  "expected_volume_mm3": 377161.7241043591,
+  "bounds_min_mm": [
+    -158.63680394104355,
+    -118.6970010727,
+    -0.04504541220999789
+  ],
+  "bounds_max_mm": [
+    159.34993254748724,
+    119.14803679287179,
+    5.1352935327983
+  ],
+  "world_extents_mm": [
+    317.9867364885308,
+    237.84503786557178,
+    5.180338945008297
+  ],
+  "thickness": {
+    "value_mm": 5.0,
+    "status": "test_assumption",
+    "note": "AGENT TECHNICAL TEST ONLY, not a human answer. Hidden thickness is unmeasured; extrusion goes along the signed source-derived normal."
+  },
+  "scale": {
+    "meters_per_source_unit": 0.001,
+    "status": "synthetic_reference",
+    "note": "Known VIRTUAL CCTag0/1 baseline 100 mm, native SfMTransform before MVS. One source unit is one mm by explicit application convention; not calibrated physical capture accuracy."
+  },
+  "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified",
+  "parameters_sha256": "19a13d64f700acfc95c50e5db1ad495a8d68827ffdb5d2c11470cb819504c5e1"
+}

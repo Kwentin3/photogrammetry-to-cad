@@ -1,0 +1,33 @@
+{
+  "valid": true,
+  "solids": 1,
+  "volume_mm3": 0.00015573562988171954,
+  "expected_volume_mm3": 0.0001557356298797757,
+  "bounds_min_mm": [
+    0.0618444773739,
+    -0.12034767815200427,
+    -0.059982374195232675
+  ],
+  "bounds_max_mm": [
+    0.1577269100640953,
+    0.0036996830938134323,
+    0.03671430529275251
+  ],
+  "world_extents_mm": [
+    0.09588243269019531,
+    0.12404736124581771,
+    0.09669667948798519
+  ],
+  "thickness": {
+    "value_mm": 0.0125,
+    "status": "test_assumption",
+    "note": "AGENT TECHNICAL TEST ONLY, not a human answer. Hidden thickness is unmeasured; extrusion goes along the signed source-derived normal."
+  },
+  "scale": {
+    "meters_per_source_unit": 0.001,
+    "status": "unverified",
+    "note": "PHYSICAL SCALE UNKNOWN. One arbitrary source unit is represented by one NOMINAL CAD mm; no physical millimetre or hidden thickness was measured."
+  },
+  "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified",
+  "parameters_sha256": "7903aff3b3d5373a9c05f8d76fa0f8c90f347295ff0d151e7c200fd05c38a582"
+}

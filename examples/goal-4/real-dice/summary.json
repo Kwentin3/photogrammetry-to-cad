@@ -1,0 +1,279 @@
+{
+  "case": "real-dice",
+  "source_path_alias": "WORK/backup/extracted/run/output/dice/Meshing_1.ply",
+  "source_sha256": "7ee3128c7c9bd943c4b412b092c6a11950f53d31593d5d1fa1784c487bab0139",
+  "source_points": 47037,
+  "source_extents_native": [
+    0.1834982,
+    0.1422553,
+    0.1857064
+  ],
+  "units": "nominal CAD mm; physical scale unknown",
+  "selection": {
+    "roi_source_units": [
+      0.056219878213235215,
+      -0.1253382546174391,
+      -0.06533842027310362,
+      0.15438469716119552,
+      0.009672654678883015,
+      0.03428913117854869
+    ],
+    "distance_threshold_mm": 0.00075,
+    "iterations": 2000,
+    "seed": 42,
+    "source_points": 47037,
+    "roi_points": 10291,
+    "plane_points": 4870,
+    "support_cloud_mm": "parameters-unresolved.inliers.ply",
+    "note": "Matched posed camera centers bind the old accepted patch to this new source region. A 5%-span-padded bounding box of mapped old support serves only as an ROI hint. Plane and convex contour are fitted freely from new source points; no old outline, ideal cube, normal or right-angle constraint is applied."
+  },
+  "fit": {
+    "rms_mm": 0.000443196378368507,
+    "maximum_absolute_residual_mm": 0.000840114180767543
+  },
+  "plane": {
+    "origin_mm": [
+      0.1084211459753595,
+      -0.05723477162020958,
+      -0.019151952613326435
+    ],
+    "x_axis": [
+      -0.004335429746170785,
+      0.9999813839405988,
+      -0.004293695513276646
+    ],
+    "y_axis": [
+      -0.7036786729125527,
+      0.0,
+      0.7105183497194346
+    ],
+    "normal": [
+      0.7105051226676307,
+      0.006101784349246905,
+      0.7036655731885785
+    ],
+    "equation_mm": [
+      0.7105051226676307,
+      0.006101784349246905,
+      0.7036655731885785,
+      -0.06320797567394613
+    ],
+    "frame_basis": "Deterministic scene-axis projection; no independent vertical measurement"
+  },
+  "contour_vertices": 53,
+  "contour_extents_mm": [
+    0.12397339683708829,
+    0.12365684637201613
+  ],
+  "contour_area_mm2": 0.012458850390382055,
+  "support_points_per_contour_area": 390886.7870955034,
+  "unresolved_build": {
+    "rejected": true,
+    "reason": "Thickness is unresolved: record a value, decision status, and note",
+    "no_export_directory_created": true
+  },
+  "first_cad": {
+    "valid": true,
+    "solids": 1,
+    "volume_mm3": 6.229425195395821e-05,
+    "expected_volume_mm3": 6.229425195191027e-05,
+    "bounds_min_mm": [
+      0.0618444773739,
+      -0.12034767815200427,
+      -0.059982374195232675
+    ],
+    "bounds_max_mm": [
+      0.1523981216440953,
+      0.003653919711194133,
+      0.03143681349384
+    ],
+    "world_extents_mm": [
+      0.0905536442701953,
+      0.1240015978631984,
+      0.09141918768907267
+    ],
+    "thickness": {
+      "value_mm": 0.005,
+      "status": "test_assumption",
+      "note": "AGENT TECHNICAL TEST ONLY, not a human answer. Hidden thickness is unmeasured; extrusion goes along the signed source-derived normal."
+    },
+    "scale": {
+      "meters_per_source_unit": 0.001,
+      "status": "unverified",
+      "note": "PHYSICAL SCALE UNKNOWN. One arbitrary source unit is represented by one NOMINAL CAD mm; no physical millimetre or hidden thickness was measured."
+    },
+    "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified",
+    "parameters_sha256": "7e87984fec08bd8687d616b769b7cab7aa08523bc46a48a9602fac717dda366b"
+  },
+  "changed_cad": {
+    "valid": true,
+    "solids": 1,
+    "volume_mm3": 0.00015573562988171954,
+    "expected_volume_mm3": 0.0001557356298797757,
+    "bounds_min_mm": [
+      0.0618444773739,
+      -0.12034767815200427,
+      -0.059982374195232675
+    ],
+    "bounds_max_mm": [
+      0.1577269100640953,
+      0.0036996830938134323,
+      0.03671430529275251
+    ],
+    "world_extents_mm": [
+      0.09588243269019531,
+      0.12404736124581771,
+      0.09669667948798519
+    ],
+    "thickness": {
+      "value_mm": 0.0125,
+      "status": "test_assumption",
+      "note": "AGENT TECHNICAL TEST ONLY, not a human answer. Hidden thickness is unmeasured; extrusion goes along the signed source-derived normal."
+    },
+    "scale": {
+      "meters_per_source_unit": 0.001,
+      "status": "unverified",
+      "note": "PHYSICAL SCALE UNKNOWN. One arbitrary source unit is represented by one NOMINAL CAD mm; no physical millimetre or hidden thickness was measured."
+    },
+    "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified",
+    "parameters_sha256": "7903aff3b3d5373a9c05f8d76fa0f8c90f347295ff0d151e7c200fd05c38a582"
+  },
+  "delivered_step_validation": {
+    "step_units": "SI_UNIT(.MILLI.,.METRE.)",
+    "valid": true,
+    "solids": 1,
+    "source_prism_to_reopened_step_bounds_error_mm": 4.808931031163866e-13,
+    "source_prism_to_reopened_step_vertices_error_mm": 6.955755579195073e-13,
+    "volume_mm3": 6.229425195395821e-05
+  },
+  "delivered_changed_step_validation": {
+    "step_units": "SI_UNIT(.MILLI.,.METRE.)",
+    "valid": true,
+    "solids": 1,
+    "source_prism_to_reopened_step_bounds_error_mm": 4.808931031163866e-13,
+    "source_prism_to_reopened_step_vertices_error_mm": 5.712660415390121e-13,
+    "volume_mm3": 0.00015573562988171954
+  },
+  "standalone_cli_validation": {
+    "step_units": "SI_UNIT(.MILLI.,.METRE.)",
+    "valid": true,
+    "solids": 1,
+    "source_prism_to_reopened_step_bounds_error_mm": 4.808931031163866e-13,
+    "source_prism_to_reopened_step_vertices_error_mm": 6.955755579195073e-13,
+    "volume_mm3": 6.229425195395821e-05
+  },
+  "standalone_edited_volume_ratio": 2.4999999999490163,
+  "only_parameter_changed": "thickness.value_mm",
+  "volume_ratio": 2.4999999999490163,
+  "coordinate_policy": "Native PLY position and tilt preserved; no recentering, right-angle constraint or conversion to an ideal outline",
+  "versions": {
+    "open3d": "0.20.0",
+    "build123d": "0.13.0",
+    "scipy": "1.17.1"
+  },
+  "owner_script_sha256": {
+    "extract_plane.py": "86577dfa73ff10e296621fcbdb4759ac0ccb983213f9b4d37551d917679f9505",
+    "build_cad.py": "6400a93f2e55760e5eadfbca49b767759a1a9686b577c94664a0aa5219da883e"
+  },
+  "limitations": [
+    "Observed convex planar patch, not a complete object",
+    "Convex hull fills unsupported holes and recesses",
+    "Hidden thickness is an explicit agent test assumption",
+    "No manufacturing tolerance or real-capture physical accuracy established"
+  ],
+  "qa_preview": {
+    "source_sha256": "7ee3128c7c9bd943c4b412b092c6a11950f53d31593d5d1fa1784c487bab0139",
+    "parameters_sha256": "8aa06e87a75430630c78ec051a28967dee63fd6b4a0fdcfd8d759d088f011614",
+    "support_points_plotted": 4870,
+    "source_points_plotted": 47037,
+    "spatial_aspect": "equal",
+    "source_positions_unchanged": true,
+    "image": "qa-preview.png"
+  },
+  "comparison_to_goal2": {
+    "old_source_sha256": "8321d806d395f8d61ce9175bf527d87c2f63042602812cb9d3cda310bd6ffa86",
+    "new_source_sha256": "7ee3128c7c9bd943c4b412b092c6a11950f53d31593d5d1fa1784c487bab0139",
+    "alignment": {
+      "owner": "Least-squares correspondence of the same posed photo camera centers; comparison only, never CAD geometry",
+      "matched_camera_count": 20,
+      "scale": 0.9999999330099807,
+      "scale_fitted": true,
+      "rotation_new_to_old": [
+        [
+          -0.7477365877878644,
+          -0.0009351775981127311,
+          0.6639948198037549
+        ],
+        [
+          -0.00037828515424167153,
+          0.9999994458789827,
+          0.0009824164436410918
+        ],
+        [
+          -0.6639953706041203,
+          0.00048340933652991084,
+          -0.7477365272151079
+        ]
+      ],
+      "translation_new_to_old": [
+        -0.0004030861752954212,
+        -0.00022458251360230053,
+        0.0002083621559768646
+      ],
+      "camera_center_rms_old_units": 0.00036603284080903033,
+      "camera_center_max_error_old_units": 0.0005869371667634186,
+      "rotation_flatten_layout": "column-major; native Pose3 is world-to-camera",
+      "pose_rotation_vs_center_alignment_max_error_deg": 0.46752242065098804,
+      "pose_rotation_vs_center_alignment_rms_error_deg": 0.43209576078267564,
+      "native_json_to_ply": "identity for both native export versions"
+    },
+    "old_points": 47640,
+    "new_points": 47037,
+    "point_count_change_percent": -1.2657430730478536,
+    "old_bbox_extents": [
+      0.15384299999999998,
+      0.17059950000000002,
+      0.15769640000000001
+    ],
+    "new_bbox_extents_in_old_comparison_frame": [
+      0.14571894369829297,
+      0.14236807055680675,
+      0.14556220251776394
+    ],
+    "bbox_extent_change_percent": [
+      -5.280744851379016,
+      -16.54836587633215,
+      -7.694657254215109
+    ],
+    "old_support_points": 4695,
+    "new_support_points": 4870,
+    "support_point_change_percent": 3.727369542066028,
+    "old_contour_area": 0.01216774499634174,
+    "new_contour_area_in_old_comparison_units": 0.012458848721144854,
+    "contour_area_change_percent": 2.392421314636639,
+    "old_support_density": 385856.21258594445,
+    "new_support_density_in_old_comparison_units": 390886.83946653554,
+    "support_density_change_percent": 1.3037568701762314,
+    "old_contour_vertices": 56,
+    "new_contour_vertices": 53,
+    "corresponding_plane_normal_angle_deg": 0.1874971384210335,
+    "old_fit": {
+      "rms_mm": 0.00040661156143073065,
+      "maximum_absolute_residual_mm": 0.0008620120556534565
+    },
+    "new_fit_in_old_comparison_units": {
+      "rms_mm": 0.00044319634867877306,
+      "maximum_absolute_residual_mm": 0.0008401141244882777
+    },
+    "symmetric_cloud_nearest_neighbor_median": 0.0004898661641983764,
+    "symmetric_cloud_nearest_neighbor_95_percentile": 0.0010405942011486142,
+    "nn95_over_old_face_characteristic_length": 0.009433575979241075,
+    "comparison_limits": [
+      "Camera-center registration is comparison only, not physical truth or CAD modification",
+      "Mapped old support bounds serve only as a Dice ROI hint; all fitting and contour vertices use actual new points",
+      "RANSAC threshold is not a bound on every refitted support residual",
+      "No unchanged-density or manufacturing tolerance requirement was imposed"
+    ],
+    "observation": "The previously accepted surface is selected through matched-camera correspondence and refitted freely from new points. Historical pip-count labels are not used as evidence. No ideal cube or same-number-of-inliers constraint was applied."
+  }
+}
