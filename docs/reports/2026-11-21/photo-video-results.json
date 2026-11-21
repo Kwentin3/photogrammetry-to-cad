@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "acceptance_source_revision": "7ed9016b5f143bdd2c94b9122a87ffe7c0d41f95",
   "scope": "Goal6 real video to dense geometry; no physical accuracy or CAD claim",
   "runtime": {
     "meshroom_revision": "b12ea8896e7e95cc9911b4ec39c272914e4da726",

@@ -435,28 +435,24 @@ if ((Get-FileHash -LiteralPath $joined -Algorithm SHA256).Hash.ToLowerInvariant(
 его exit code сам по себе недостаточен. Account balance не заменяет invoices.
 
 Локальный отчёт — после backup/освобождения GPU, в существующей Windows среде
-Open3D/NumPy. Cloud effective-settings.json оставить неизменным. В отдельной
-report-settings.local.json заменить только абсолютные пути input_manifest и,
-если есть, scale.applied_evidence на точные распакованные файлы. Перед этим
-сверить manifest с сохранённым input_manifest_sha256; scene/cloud/scale evidence
-сохраняют cloud bytes/SHA. Rebase — локальная копия, не исправление cloud evidence.
+Open3D/NumPy. Cloud effective-settings.json оставить неизменным. Явные параметры
+`--manifest` и при известном масштабе `--scale-evidence` указывают на точные
+локальные копии Linux-артефактов. Отчёт сверяет manifest с сохранённым
+input_manifest_sha256, а scale evidence — со сценой, режимом, единицами и
+источником масштаба; исходный JSON переписывать не требуется. В отчёт попадают
+фактически прочитанные локальные пути и SHA. Output не может совпасть с входами.
 
 ```powershell
 $unpacked="$work/backup/unpacked"
 $runLocal="$unpacked/runs/standard"
-$localSettings=Get-Content "$runLocal/effective-settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+$originalSettings="$runLocal/effective-settings.json"
+$settings=Get-Content $originalSettings -Raw -Encoding UTF8 | ConvertFrom-Json
 $manifestLocal=[IO.Path]::GetFullPath("$unpacked/capture/manifest.json")
-if ((Get-FileHash $manifestLocal -Algorithm SHA256).Hash.ToLowerInvariant() -ne $localSettings.input_manifest_sha256) { throw 'Capture manifest differs from cloud binding' }
-$localSettings.input_manifest=$manifestLocal
-if ($localSettings.scale.PSObject.Properties.Name -contains 'applied_evidence') {
-  $localSettings.scale.applied_evidence=[IO.Path]::GetFullPath("$runLocal/scale-evidence.json")
+$reportArgs=@('--scene',"$runLocal/scene.json",'--cloud',"$runLocal/dense.ply",'--settings',$originalSettings,'--manifest',$manifestLocal,'--output',"$runLocal/reconstruction-report.json")
+if ($settings.scale.mode -in @('measured_baseline','marker_coords')) {
+  $reportArgs+=@('--scale-evidence',"$runLocal/scale-evidence.json")
 }
-$localCopy="$runLocal/report-settings.local.json"
-if (Test-Path $localCopy) { throw 'Preserve existing local settings; choose another file' }
-[IO.File]::WriteAllText($localCopy,($localSettings | ConvertTo-Json -Depth 100),[Text.UTF8Encoding]::new($false))
-$readback=Get-Content $localCopy -Raw -Encoding UTF8 | ConvertFrom-Json
-if ($readback.input_manifest -ne $manifestLocal) { throw 'Local settings readback' }
-& $python "$repo/scripts/reconstruction_report.py" --scene "$runLocal/scene.json" --cloud "$runLocal/dense.ply" --settings "$runLocal/report-settings.local.json" --output "$runLocal/reconstruction-report.json"
+& $python "$repo/scripts/reconstruction_report.py" @reportArgs
 if ($LASTEXITCODE -ne 0) { throw 'Reconstruction report failed' }
 ```
 
@@ -467,8 +463,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Reconstruction report failed' }
 
 ## Маски, масштаб и дополнительные режимы
 
-Готовые маски: masks.folder/extension/features/invert; для dense уже нужна
-полярность keep=nonzero, reject=zero. Размеры/имена соответствуют кадрам или
+Готовые маски: masks.folder/extension/features/invert; папка должна содержать
+хотя бы один файл с указанным расширением до загрузки runtime. Для masked Legacy
+обязательны EXR с alpha и camera metadata: adapter задаёт outputFileType=exr и
+saveMetadata=true. Для dense уже нужна полярность keep=nonzero, reject=zero. Размеры/имена соответствуют кадрам или
 native view IDs. Автосегментация, turntable и две стороны остаются изученными,
 пока нет их реального прогона; зависимости/ограничения — в [матрице](meshroom-modes.md).
 
@@ -479,7 +477,8 @@ distance, units mm/cm/m и measurement_source реального замера. A
 отношение к native базе и передаёт scalar SfMTransform без смены углов/осей/начала.
 Положения меток и наблюдения должны быть однозначны. Native исполнение/численная
 проверка имеют отдельный статус в Goal #6; они не доказывают физическую точность.
-CCTag ID encoding нового Standard пока не квалифицирован.
+Любой describer с префиксом cctag, без учёта регистра, отклоняется в Standard:
+CCTag ID encoding нового DAG пока не квалифицирован.
 
 marker_coords с полными XYZ зарезервирован и общим adapter отвергается:
 использовать только отдельно проверенный исторический native from_markers рецепт

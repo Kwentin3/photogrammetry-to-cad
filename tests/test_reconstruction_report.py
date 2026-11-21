@@ -142,6 +142,86 @@ class ReconstructionReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Non-finite"):
             reporting.verified_scale(self.config, reporting.artifact(self.scene))
 
+    def cli(self, output, *extra):
+        command = [sys.executable, str(SCRIPTS / "reconstruction_report.py"),
+                   "--scene", str(self.scene), "--cloud", str(self.cloud),
+                   "--settings", str(self.settings), "--output", str(output), *extra]
+        return subprocess.run(command, capture_output=True, text=True, timeout=60)
+
+    def test_cli_local_overrides_preserve_linux_settings_and_real_inputs(self):
+        self.apply_scale_evidence()
+        self.config["input_manifest"] = "/root/original-run/input-manifest.json"
+        self.config["input_manifest_sha256"] = reporting.artifact(self.manifest)["sha256"]
+        self.config["scale"]["applied_evidence"] = "/root/original-run/scale-evidence.json"
+        self.config["scale"]["measurement_source"] = "test fixture receipt"
+        self.write(self.settings, self.config)
+        originals = {path: path.read_bytes() for path in (
+            self.scene, self.cloud, self.settings, self.manifest, self.evidence)}
+        output = self.root / "relocated-report.json"
+        completed = self.cli(output, "--manifest", str(self.manifest),
+                             "--scale-evidence", str(self.evidence))
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        result = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(result["status"], "reported")
+        self.assertEqual(result["inputs"]["settings"], reporting.artifact(self.settings))
+        self.assertEqual(result["inputs"]["input_manifest"], reporting.artifact(self.manifest))
+        self.assertEqual(result["scale"]["evidence"], reporting.artifact(self.evidence))
+        self.assertEqual(result["scale"]["source"]["measurement_source"], "test fixture receipt")
+        self.assertEqual(result["cloud"]["finite_point_count"], 2)
+        self.assertEqual(result["cloud"]["bbox_min"], [1, 2, 3])
+        self.assertEqual(result["cloud"]["bbox_max"], [4, 6, 8])
+        for path, original in originals.items():
+            self.assertEqual(path.read_bytes(), original, str(path))
+
+    def test_cli_never_overwrites_explicit_local_override_inputs(self):
+        self.apply_scale_evidence()
+        local_manifest = self.root / "relocated-manifest.json"
+        local_manifest.write_bytes(self.manifest.read_bytes())
+        local_evidence = self.root / "relocated-scale.json"
+        local_evidence.write_bytes(self.evidence.read_bytes())
+        # The explicit inputs must be protected even before settings can be read.
+        self.settings.write_text("invalid JSON", encoding="utf-8")
+        for path in (local_manifest, local_evidence):
+            with self.subTest(path=path.name):
+                original = path.read_bytes()
+                completed = self.cli(path, "--manifest", str(local_manifest),
+                                     "--scale-evidence", str(local_evidence))
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertIn("Output must differ", completed.stderr)
+                self.assertEqual(path.read_bytes(), original)
+
+    def test_local_manifest_override_keeps_saved_hash_binding(self):
+        self.config["input_manifest"] = "/root/original-run/input-manifest.json"
+        self.config["input_manifest_sha256"] = reporting.artifact(self.manifest)["sha256"]
+        self.write(self.settings, self.config)
+        self.write(self.manifest, {"images": ["foreign-image.jpg"]})
+        with self.assertRaisesRegex(ValueError, "settings.input_manifest_sha256"):
+            reporting.report(self.scene, self.cloud, self.settings, self.manifest)
+
+    def test_local_evidence_override_keeps_scene_scale_and_source_bindings(self):
+        evidence = self.apply_scale_evidence()
+        self.config["scale"]["applied_evidence"] = "/root/original-run/scale-evidence.json"
+        self.config["scale"]["measurement_source"] = "test fixture receipt"
+        mutations = (
+            ("mode", "marker_coords", "do not match"),
+            ("units", "cm", "do not match"),
+            ("scene_sha256", "foreign-scene", "native scene SHA-256"),
+            ("source", {**evidence["source"], "ids": [2, 6]}, "ids differs"),
+            ("source", {**evidence["source"], "distance": 3}, "distance differs"),
+            ("source", {**evidence["source"], "measurement_source": "foreign receipt"},
+             "measurement_source differs"),
+        )
+        for key, value, error in mutations:
+            with self.subTest(key=key, value=value):
+                altered = deepcopy(evidence)
+                altered[key] = value
+                self.write(self.evidence, altered)
+                with self.assertRaisesRegex(ValueError, error):
+                    reporting.verified_scale(self.config, reporting.artifact(self.scene), self.evidence)
+        with self.assertRaisesRegex(ValueError, "Unknown scale contradicts"):
+            reporting.verified_scale({"scale": {"mode": "unknown"}},
+                                     reporting.artifact(self.scene), self.evidence)
+
     def test_cli_never_overwrites_scene_even_if_settings_are_invalid(self):
         original = self.scene.read_bytes()
         self.settings.write_text("invalid JSON", encoding="utf-8")

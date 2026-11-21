@@ -62,13 +62,13 @@ def scene_summary(scene):
     }
 
 
-def verified_scale(settings, scene_artifact):
+def verified_scale(settings, scene_artifact, evidence_path=None):
     request = settings.get("scale", {"mode": "unknown"})
     if not isinstance(request, dict):
         raise ValueError("settings.scale must be an object")
     mode = request.get("mode")
     if mode == "unknown":
-        if request.get("applied_evidence"):
+        if request.get("applied_evidence") or evidence_path is not None:
             raise ValueError("Unknown scale contradicts supplied applied scale evidence")
         return {
             "mode": "unknown", "applied": False, "units": "unknown",
@@ -80,7 +80,8 @@ def verified_scale(settings, scene_artifact):
     units = request.get("units")
     if units not in UNITS:
         raise ValueError("Known scale requires explicit mm, cm or m units")
-    path = absolute_file(request.get("applied_evidence"), "scale.applied_evidence")
+    path = (Path(evidence_path).resolve(strict=True) if evidence_path is not None
+            else absolute_file(request.get("applied_evidence"), "scale.applied_evidence"))
     evidence_artifact = artifact(path)
     evidence = read_json(path)
     if (evidence.get("status") != "passed" or evidence.get("applied") is not True
@@ -110,11 +111,16 @@ def verified_scale(settings, scene_artifact):
             raise ValueError("Measured baseline evidence distance must be positive")
         if not source.get("measurement_source"):
             raise ValueError("Measured baseline evidence needs its measurement source")
-        for key, expected in (("ids", ids), ("distance", distance)):
+        for key, expected in (("ids", ids), ("distance", distance),
+                              ("measurement_source", source["measurement_source"])):
             if key in request and request[key] != expected:
                 raise ValueError(f"Scale evidence {key} differs from requested measurement")
-    elif not source.get("coordinate_source"):
-        raise ValueError("Marker coordinate evidence needs its coordinate source")
+    else:
+        if not source.get("coordinate_source"):
+            raise ValueError("Marker coordinate evidence needs its coordinate source")
+        if ("coordinate_source" in request
+                and request["coordinate_source"] != source["coordinate_source"]):
+            raise ValueError("Scale evidence coordinate_source differs from requested coordinates")
     verification = evidence["verification"]
     if not isinstance(verification, dict):
         raise ValueError("Scale evidence verification must be an object")
@@ -147,14 +153,18 @@ def cloud_summary(path):
             "coordinate_frame": "native PLY; cloud lineage is recorded by the native graph"}
 
 
-def report(scene_path, cloud_path, settings_path):
+def report(scene_path, cloud_path, settings_path, manifest_path=None, scale_evidence_path=None):
     inputs = {"scene": artifact(scene_path), "cloud": artifact(cloud_path),
               "settings": artifact(settings_path)}
     settings = read_json(settings_path)
-    manifest = absolute_file(settings["input_manifest"], "settings.input_manifest")
+    manifest = (Path(manifest_path).resolve(strict=True) if manifest_path is not None
+                else absolute_file(settings["input_manifest"], "settings.input_manifest"))
     inputs["input_manifest"] = artifact(manifest)
+    if ("input_manifest_sha256" in settings
+            and settings["input_manifest_sha256"] != inputs["input_manifest"]["sha256"]):
+        raise ValueError("Input manifest does not match settings.input_manifest_sha256")
     # Validate scale before importing Open3D or reading the potentially large cloud.
-    scale = verified_scale(settings, inputs["scene"])
+    scale = verified_scale(settings, inputs["scene"], scale_evidence_path)
     scene = scene_summary(read_json(scene_path))
     return {"schema_version": 1, "status": "reported",
             "runtime": settings.get("runtime", {}), "inputs": inputs,
@@ -167,6 +177,10 @@ def main():
                         help="Native canonical JSON with views/poses/intrinsics/CCTag3 observations")
     parser.add_argument("--cloud", type=Path, required=True, help="Native dense PLY exported after backup")
     parser.add_argument("--settings", type=Path, required=True, help="Effective settings and scale evidence paths")
+    parser.add_argument("--manifest", type=Path,
+                        help="Explicit local copy of input manifest; preserve its settings SHA-256 binding")
+    parser.add_argument("--scale-evidence", type=Path,
+                        help="Explicit local copy of applied scale evidence; preserve scene and scale binding")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     output = args.output.resolve()
@@ -174,6 +188,7 @@ def main():
     if output == checkout or checkout in output.parents:
         parser.error("Write reconstruction evidence outside the source checkout")
     protected = {args.scene.resolve(), args.cloud.resolve(), args.settings.resolve()}
+    protected.update(path.resolve() for path in (args.manifest, args.scale_evidence) if path is not None)
     if output in protected:
         parser.error("Output must differ from every input and scale evidence artifact")
     try:
@@ -183,7 +198,7 @@ def main():
                 protected.add(Path(value).resolve())
         if output in protected:
             parser.error("Output must differ from every input and scale evidence artifact")
-        result = report(args.scene, args.cloud, args.settings)
+        result = report(args.scene, args.cloud, args.settings, args.manifest, args.scale_evidence)
     except (ValueError, KeyError, TypeError, AttributeError, OverflowError, OSError, RuntimeError) as error:
         result = {"schema_version": 1, "status": "error", "error": str(error)}
     result["output_file"] = str(output)

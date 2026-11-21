@@ -112,6 +112,31 @@ def node(graph, kind):
     return found[0]
 
 
+def preflight_masks(base, masks):
+    folder = outside(base / masks['folder']).resolve(strict=True)
+    extension = masks['extension'].lstrip('.')
+    if not extension or not extension.isalnum():
+        raise ValueError('Mask extension must be explicit')
+    if not folder.is_dir() or not any(
+            path.is_file() and path.suffix == '.' + extension for path in folder.iterdir()):
+        raise ValueError(f'Masks folder must contain at least one .{extension} file: {folder}')
+    if masks.get('invert', False):
+        raise ValueError('Dense masks must already have keep=nonzero, reject=zero polarity')
+    return folder, extension
+
+
+def configure_masks(graph, pipeline, masks, folder, extension):
+    if masks.get('features', True):
+        settings(node(graph, 'FeatureExtraction'), {
+            'masksFolder': str(folder), 'maskExtension': extension, 'maskInvert': False})
+    dense = node(graph, 'ExportImages' if pipeline == 'standard' else 'PrepareDenseScene')
+    values = {'masksFolders': [str(folder)], 'maskExtension': extension}
+    if pipeline == 'legacy':
+        # The masked dense route requires alpha and native camera metadata.
+        values.update(outputFileType='exr', saveMetadata=True)
+    settings(dense, values)
+
+
 def prepare(args):
     root = outside(args.run)
     if root.exists():
@@ -128,20 +153,23 @@ def prepare(args):
     threads = config['resources']['threads']
     if isinstance(threads, bool) or not isinstance(threads, int) or threads < 1:
         raise ValueError('resources.threads must be a positive integer')
-    for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS'):
-        os.environ[key] = str(threads)
-    module, runtime = init_runtime(args.meshroom)
-    graph = module.Graph('reconstruction')
-    filename = 'photogrammetry.mgt' if pipeline == 'standard' else 'photogrammetryLegacy.mgt'
-    template = args.meshroom.resolve() / 'aliceVision/share/meshroom' / filename
     scale = config.get('scale', {'mode': 'unknown'})
     if scale['mode'] not in ('unknown', 'measured_baseline', 'marker_coords'):
         raise ValueError('Invalid physical scale mode')
     if scale['mode'] == 'marker_coords':
         raise ValueError('Use the historical native from_markers recipe for surveyed XYZ; this adapter qualifies scalar scale only')
     describers = config.get('nodes', {}).get('FeatureExtraction_1', {}).get('describerTypes', ['sift'])
-    if pipeline == 'standard' and (scale['mode'] != 'unknown' or 'cctag3' in describers):
+    if pipeline == 'standard' and (scale['mode'] != 'unknown' or any(
+            str(describer).lower().startswith('cctag') for describer in describers)):
         raise ValueError('CCTag ID encoding in the new SfM DAG is unqualified; choose legacy for marker diagnostics/scale')
+    masks = config.get('masks')
+    mask_input = preflight_masks(base, masks) if masks else None
+    for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS'):
+        os.environ[key] = str(threads)
+    module, runtime = init_runtime(args.meshroom)
+    graph = module.Graph('reconstruction')
+    filename = 'photogrammetry.mgt' if pipeline == 'standard' else 'photogrammetryLegacy.mgt'
+    template = args.meshroom.resolve() / 'aliceVision/share/meshroom' / filename
     with module.GraphModification(graph):
         graph.initFromTemplate(str(template))
         # Stop at native dense geometry. Presentation/texturing is separate.
@@ -156,20 +184,8 @@ def prepare(args):
             settings(node(graph, 'SfMTransform'), {
                 'method': 'transformation', 'transformation': '', 'scale': 1.,
                 'applyScale': True, 'applyRotation': False, 'applyTranslation': False})
-        masks = config.get('masks')
         if masks:
-            folder = outside(base / masks['folder']).resolve(strict=True)
-            extension = masks['extension'].lstrip('.')
-            if not extension or not extension.isalnum():
-                raise ValueError('Mask extension must be explicit')
-            if masks.get('features', True):
-                settings(node(graph, 'FeatureExtraction'), {
-                    'masksFolder': str(folder), 'maskExtension': extension,
-                    'maskInvert': masks.get('invert', False)})
-            if masks.get('invert', False):
-                raise ValueError('Dense masks must already have keep=nonzero, reject=zero polarity')
-            dense_images = node(graph, 'ExportImages' if pipeline == 'standard' else 'PrepareDenseScene')
-            settings(dense_images, {'masksFolders': [str(folder)], 'maskExtension': extension})
+            configure_masks(graph, pipeline, masks, *mask_input)
         camera = node(graph, 'CameraInit')
         # All initialization-affecting settings, including FOV, are already set.
         camera.nodeDesc.initialize(camera, [str(images / item['name']) for item in files], [])
