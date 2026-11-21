@@ -575,7 +575,8 @@ CONTAINER_API_KEY без xtrace, argv/логов/полного environ. Отд�
 invoice именно этой аренды с диском/трафиком, не выводить стоимость из account balance.
 
 На CPU использовать неизменённые extract_plane/build_cad/check_marker_scale API
-из [базового рецепта](runbook.md#облако--параметры--cad-на-cpu), но **новые PLY**.
+из [сохранённого CPU-рецепта](https://github.com/Kwentin3/photogrammetry-to-cad/blob/f3173b3fdfe27f7e760b84e23f6845b11a937b65/docs/runbook.md#облако--параметры--cad-на-cpu),
+но **новые PLY**. CAD API не менялся; облачную часть старого рецепта не повторять.
 Выбрать ROI по просмотренной новой поверхности; старые ROI не гарантируют её
 идентичность. Для synthetic: meters_per_unit0.001, scale_status synthetic_reference;
 для Dice без baseline:0.001/unverified, условные CAD мм, не физические миллиметры.
