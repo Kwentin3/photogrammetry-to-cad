@@ -59,7 +59,7 @@ mkdir -p -- "$target/probes"
     printf '%s\n' \
       'export PATH="$ALICEVISION_ROOT/bin:$MESHROOM_INSTALL_DIR:$MESHROOM_INSTALL_DIR/python/bin:$PATH"' \
       'export LD_LIBRARY_PATH="$ALICEVISION_ROOT/lib64:$ALICEVISION_ROOT/lib:$MESHROOM_INSTALL_DIR/python/lib:$MESHROOM_INSTALL_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"' \
-      'export PYTHONPATH="$MESHROOM_INSTALL_DIR/lib${PYTHONPATH:+:$PYTHONPATH}"' \
+      'export PYTHONPATH="$MESHROOM_INSTALL_DIR/lib:$ALICEVISION_ROOT/lib64/python:$ALICEVISION_ROOT/lib64/python3.11/site-packages:$ALICEVISION_ROOT/lib/python:$ALICEVISION_ROOT/lib/python3.11/site-packages${PYTHONPATH:+:$PYTHONPATH}"' \
       'export QT_QPA_PLATFORM=offscreen'
 } >"$target/env.sh.tmp"
 mv -- "$target/env.sh.tmp" "$target/env.sh"
@@ -72,19 +72,37 @@ timeout --signal=TERM --kill-after=5s 60s "$target/meshroom_compute" --help >"$t
 grep -Fq -- --cache "$target/probes/meshroom_compute-help.txt" || die 'Missing compute cache option'
 timeout --signal=TERM --kill-after=5s 60s "$MESHROOM_PYTHON" - >"$target/probes/graph-api.txt" 2>&1 <<'PY'
 import os, pathlib, sys
+from pyalicevision import parallelization as avpar
 import meshroom
 meshroom.setupEnvironment()
 import meshroom.core
 from meshroom.core.graph import Graph
 meshroom.core.initPipelines()
+meshroom.core.initPlugins()
+meshroom.core.initNodes()
 root = pathlib.Path(os.environ["MESHROOM_INSTALL_DIR"]).resolve()
 module = pathlib.Path(meshroom.__file__).resolve()
 assert root in module.parents, "Meshroom module must come from pinned distribution"
+av_module = pathlib.Path(avpar.__file__).resolve()
+assert root / "aliceVision" in av_module.parents, "Bindings must come from pinned AliceVision"
 assert "photogrammetryLegacy" in meshroom.core.pipelineTemplates
+graph = Graph("bootstrap-probe")
+graph.initFromTemplate(meshroom.core.pipelineTemplates["photogrammetryLegacy"])
+compatibility = [node.name for node in graph.nodes if node.isCompatibilityNode]
+assert not compatibility, "Legacy template has compatibility nodes: " + repr(compatibility)
+for name in ("CameraInit_1", "FeatureExtraction_1", "FeatureMatching_1", "StructureFromMotion_1",
+             "PrepareDenseScene_1", "DepthMap_1", "DepthMapFilter_1", "Meshing_1"):
+    node = graph.node(name)
+    assert node is not None and node.nodeDesc is not None, "Missing native node: " + name
+for node_type in ("ImageMasking", "SfMTransform"):
+    node = graph.addNewNode(node_type)
+    assert not node.isCompatibilityNode and node.nodeDesc is not None, "Missing native node: " + node_type
 print("python=" + sys.executable)
 print("meshroom=" + str(module))
+print("pyalicevision=" + str(av_module))
 print("legacy_template=" + meshroom.core.pipelineTemplates["photogrammetryLegacy"])
 print("graph_api=" + Graph.__module__)
+print("native_nodes=Legacy,ImageMasking,SfMTransform (no compatibility nodes)")
 PY
 probe() {
     local name=$1 rc=0

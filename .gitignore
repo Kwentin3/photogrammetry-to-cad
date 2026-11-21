@@ -32,6 +32,7 @@ id_ed25519*
 *.pcd
 *.abc
 *.usda
+*.usdc
 *.log
 
 # Крупные OBJ/STL хранить в /data, /work или /output: эти каталоги исключены выше.
