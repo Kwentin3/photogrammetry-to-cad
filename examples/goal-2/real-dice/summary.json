@@ -1,0 +1,210 @@
+{
+  "case": "ACTUAL photographed masked Dice reconstruction to one finite planar CAD patch",
+  "cloud_state_at_start": "destroyed_verified",
+  "source_sha256": "8321d806d395f8d61ce9175bf527d87c2f63042602812cb9d3cda310bd6ffa86",
+  "source_cloud_relative_to_issue2": "output\\cloud\\dice-masked-result\\output\\dice-masked-dense.ply",
+  "source_points": 47640,
+  "scale_status": "unverified",
+  "units_warning": "PHYSICAL SCALE UNKNOWN. Identity representation only: 1 source arbitrary unit = 1 NOMINAL CAD mm (meters_per_unit=.001). This is not a measured millimetre, metric calibration, or physical dimension of the real Dice. All mm/mm2/mm3 labels in this example are nominal CAD units only.",
+  "selection": {
+    "roi_source_units": [
+      -0.175139,
+      -0.129138,
+      -0.074,
+      -0.021294,
+      0.0414635,
+      -0.05
+    ],
+    "distance_threshold_mm": 0.00075,
+    "iterations": 2000,
+    "seed": 42,
+    "source_points": 47640,
+    "roi_points": 11729,
+    "plane_points": 4695,
+    "support_cloud_mm": "parameters-unresolved.inliers.ply"
+  },
+  "fit_nominal_units": {
+    "rms_mm": 0.00040661156143073065,
+    "maximum_absolute_residual_mm": 0.0008620120556534565
+  },
+  "plane": {
+    "origin_mm": [
+      -0.09142021194888168,
+      -0.06046363329080938,
+      -0.05747901450479221
+    ],
+    "x_axis": [
+      0.00020878683103748666,
+      0.9999946114549331,
+      0.0032761973622800365
+    ],
+    "y_axis": [
+      -0.9979755097024071,
+      0.0,
+      0.06359938705853092
+    ],
+    "normal": [
+      0.06359904435036753,
+      -0.003282843446986978,
+      0.9979701320663974
+    ],
+    "equation_mm": [
+      0.06359904435036753,
+      -0.003282843446986978,
+      0.9979701320663974,
+      0.06297808516832101
+    ],
+    "frame_basis": "Deterministic scene-axis projection; no independent vertical measurement"
+  },
+  "contour_vertices": 56,
+  "contour_area_nominal_mm2": 0.012167744996341736,
+  "unresolved_build": {
+    "rejected": true,
+    "exception": "ValueError",
+    "reason": "Thickness is unresolved: record a value, decision status, and note",
+    "no_export_directory_created": true
+  },
+  "original_cad": {
+    "valid": true,
+    "solids": 1,
+    "volume_mm3": 6.083872498164169e-05,
+    "expected_volume_mm3": 6.083872498170868e-05,
+    "bounds_min_mm": [
+      -0.15048114812202537,
+      -0.11949517378,
+      -0.06150639653388
+    ],
+    "bounds_max_mm": [
+      -0.027929608664717095,
+      0.0032558103190169305,
+      -0.048701952278744305
+    ],
+    "world_extents_mm": [
+      0.12255153945730828,
+      0.12275098409901694,
+      0.012804444255135695
+    ],
+    "thickness": {
+      "value_mm": 0.005,
+      "status": "test_assumption",
+      "note": "TECHNICAL TEST ONLY: nominal CAD mm extrusion along +normal. Hidden thickness and physical size are unmeasured; this slab is not the whole Dice."
+    },
+    "scale": {
+      "meters_per_source_unit": 0.001,
+      "status": "unverified",
+      "note": "PHYSICAL SCALE UNKNOWN. Identity representation only: 1 source arbitrary unit = 1 NOMINAL CAD mm (meters_per_unit=.001). This is not a measured millimetre, metric calibration, or physical dimension of the real Dice. All mm/mm2/mm3 labels in this example are nominal CAD units only."
+    },
+    "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified",
+    "parameters_sha256": "6cf8c7d1fe2287989316657dffb634bdc7f1559189237fc5042752ee7bddd062"
+  },
+  "thickness_edited_cad": {
+    "valid": true,
+    "solids": 1,
+    "volume_mm3": 0.0001520968124541141,
+    "expected_volume_mm3": 0.00015209681245427172,
+    "bounds_min_mm": [
+      -0.15048114812202537,
+      -0.11951979510556283,
+      -0.06150639653388
+    ],
+    "bounds_max_mm": [
+      -0.027452615832087097,
+      0.0032558103190169305,
+      -0.041217176288263234
+    ],
+    "world_extents_mm": [
+      0.12302853228993828,
+      0.12277560542457977,
+      0.020289220245616767
+    ],
+    "thickness": {
+      "value_mm": 0.0125,
+      "status": "test_assumption",
+      "note": "TECHNICAL TEST ONLY: nominal CAD mm extrusion along +normal. Hidden thickness and physical size are unmeasured; this slab is not the whole Dice."
+    },
+    "scale": {
+      "meters_per_source_unit": 0.001,
+      "status": "unverified",
+      "note": "PHYSICAL SCALE UNKNOWN. Identity representation only: 1 source arbitrary unit = 1 NOMINAL CAD mm (meters_per_unit=.001). This is not a measured millimetre, metric calibration, or physical dimension of the real Dice. All mm/mm2/mm3 labels in this example are nominal CAD units only."
+    },
+    "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified",
+    "parameters_sha256": "9df9b4626c7b343bf23874a1a55d24ba83b333229cf604cfb76b039dec056db2"
+  },
+  "only_geometry_edit": "thickness.value_mm: .005 -> .0125; every other field is unchanged",
+  "volume_ratio": 2.5000000000001625,
+  "independent_world_bounds_max_error_nominal_mm": 4.3806624994147114e-13,
+  "standalone_cli": {
+    "passed": true,
+    "readback": {
+      "valid": true,
+      "solids": 1,
+      "volume_mm3": 6.083872498164169e-05,
+      "expected_volume_mm3": 6.083872498170868e-05,
+      "bounds_min_mm": [
+        -0.15048114812202537,
+        -0.11949517378,
+        -0.06150639653388
+      ],
+      "bounds_max_mm": [
+        -0.027929608664717095,
+        0.0032558103190169305,
+        -0.048701952278744305
+      ],
+      "world_extents_mm": [
+        0.12255153945730828,
+        0.12275098409901694,
+        0.012804444255135695
+      ],
+      "thickness": {
+        "value_mm": 0.005,
+        "status": "test_assumption",
+        "note": "TECHNICAL TEST ONLY: nominal CAD mm extrusion along +normal. Hidden thickness and physical size are unmeasured; this slab is not the whole Dice."
+      },
+      "scale": {
+        "meters_per_source_unit": 0.001,
+        "status": "unverified",
+        "note": "PHYSICAL SCALE UNKNOWN. Identity representation only: 1 source arbitrary unit = 1 NOMINAL CAD mm (meters_per_unit=.001). This is not a measured millimetre, metric calibration, or physical dimension of the real Dice. All mm/mm2/mm3 labels in this example are nominal CAD units only."
+      },
+      "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified"
+    },
+    "command": "python model.py --output model-standalone.step"
+  },
+  "versions": {
+    "open3d": "0.20.0",
+    "build123d": "0.13.0",
+    "scipy": "1.17.1"
+  },
+  "owner_script_sha256": {
+    "extract_plane.py": "813a1a92e837d8db1b10c27d7ce4043d7103ea70c0d531dec32fdca4df30fdd7",
+    "build_cad.py": "6400a93f2e55760e5eadfbca49b767759a1a9686b577c94664a0aa5219da883e"
+  },
+  "visual_qa_review": {
+    "qa_preview_viewed": true,
+    "observed": "Support lies on the visible upper Dice surface. Six circular regions with missing planar support match the visible pip recess pattern; this is object surface support rather than the discarded background sheet.",
+    "boundary_scope": "Convex contour encloses central planar support and retreats from rounded outer edges; it is not the complete original face boundary.",
+    "unmodelled": "Pip recesses, rounded boundary and complete Dice topology are not reproduced by this planar extrusion. The convex slab fills the unsupported interior regions."
+  },
+  "limitations": [
+    "One source-derived planar patch with a convex support envelope, not a complete Dice CAD model",
+    "No physical scale, accuracy tolerance or physical hidden thickness was provided",
+    "RANSAC approximates observed points; curvature, recesses and missing edge support are not recovered",
+    "Convex envelope can bridge recesses or missing support; validate with QA preview",
+    "Thickness and +normal extrusion are explicit technical test decisions, not measured hidden geometry"
+  ],
+  "qa_preview": "qa-preview.png",
+  "published_files": {
+    "model.py": "05fd634de7017e19fd40d5305915a66fceb90205abfac580b92b1c7e6ced7c70",
+    "model.step": "9c0be154f3bcafd99628843dd4dd109d9ebe4d20094aeda574caf32580c6f70a",
+    "changed.step": "85215862989e0149e14329aee163690e1f8344cdee2433ff80e3d5bf80118c63",
+    "parameters.json": "6cf8c7d1fe2287989316657dffb634bdc7f1559189237fc5042752ee7bddd062",
+    "parameters-unresolved.json": "8e1385e657876b2dc55cbba0a7c987da31dcc9347b849656aa1b09f11bd0f607",
+    "parameters-changed.json": "9df9b4626c7b343bf23874a1a55d24ba83b333229cf604cfb76b039dec056db2",
+    "question.svg": "38cb37d69008325ffd3c803864a747c320d1b7b8d7c46e799087d32b4ae755ef",
+    "inspection.json": "6f4e58b3934f2b27286164e457183c4a0a2120951ac9223377cf126de590359a",
+    "changed.inspection.json": "71e9732ee93ffc089b2b45c74c8ee4de1aa5430b5e55f2d4ac0d815626ae3b1e",
+    "qa-preview.png": "e24a6d64926a97931fc4705a0106dc7ba8d8bf0fa6ddae41350e82b715b8fc60"
+  },
+  "publication_note": "Selected small files copied from accepted local run; full clouds/cache/logs and full run summary are retained outside Git.",
+  "question_generation_code_sha256": "d18b602841439e7c154c02ef5866e507cf1b295857e8fd84c31cf548d9fa52db",
+  "question_generation_note": "SVG regenerated after clarifying unverified units as nominal CAD mm. AST of geometry functions unchanged from the accepted run; run source retained outside Git."
+}

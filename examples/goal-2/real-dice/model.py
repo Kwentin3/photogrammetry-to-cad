@@ -1,0 +1,194 @@
+"""Editable planar-extrusion model; lengths in mm.
+The scale and hidden thickness retain their explicit evidence status.
+Run: python model.py --output model.step
+"""
+import argparse
+import json
+import math
+from pathlib import Path
+from build123d import BuildPart, BuildSketch, Plane, Polygon, export_step, extrude, import_step
+
+PARAMETERS = {'format': 'planar-extrusion-v1',
+ 'part_id': 'patch-01',
+ 'units': 'mm',
+ 'source': {'filename': 'dice-masked-dense.ply',
+            'sha256': '8321d806d395f8d61ce9175bf527d87c2f63042602812cb9d3cda310bd6ffa86',
+            'binding': 'Checksum of the observed input file; not proof of origin or authenticity'},
+ 'scale': {'meters_per_source_unit': 0.001,
+           'status': 'unverified',
+           'note': 'PHYSICAL SCALE UNKNOWN. Identity representation only: 1 source arbitrary unit '
+                   '= 1 NOMINAL CAD mm (meters_per_unit=.001). This is not a measured millimetre, '
+                   'metric calibration, or physical dimension of the real Dice. All mm/mm2/mm3 '
+                   'labels in this example are nominal CAD units only.'},
+ 'selection': {'roi_source_units': [-0.175139, -0.129138, -0.074, -0.021294, 0.0414635, -0.05],
+               'distance_threshold_mm': 0.00075,
+               'iterations': 2000,
+               'seed': 42,
+               'source_points': 47640,
+               'roi_points': 11729,
+               'plane_points': 4695,
+               'support_cloud_mm': 'parameters-unresolved.inliers.ply'},
+ 'plane': {'origin_mm': [-0.09142021194888168, -0.06046363329080938, -0.05747901450479221],
+           'x_axis': [0.00020878683103748666, 0.9999946114549331, 0.0032761973622800365],
+           'y_axis': [-0.9979755097024071, 0.0, 0.06359938705853092],
+           'normal': [0.06359904435036753, -0.003282843446986978, 0.9979701320663974],
+           'equation_mm': [0.06359904435036753,
+                           -0.003282843446986978,
+                           0.9979701320663974,
+                           0.06297808516832101],
+           'frame_basis': 'Deterministic scene-axis projection; no independent vertical '
+                          'measurement'},
+ 'outline_mm': [[-0.05010950598084298, 0.032890699388897854],
+                [-0.054787615993163785, 0.02072244522514823],
+                [-0.05755879793925939, 0.012036045528880927],
+                [-0.0579844194260878, 0.008905997339918838],
+                [-0.05844776183953085, 0.004373739828846174],
+                [-0.05872742143131091, 0.0004094798103870598],
+                [-0.059015444278898765, -0.006179933089792553],
+                [-0.058462747839954705, -0.01396812344383452],
+                [-0.05614196736065682, -0.023918979389512728],
+                [-0.054372150650105686, -0.029226891343482973],
+                [-0.05371850586130202, -0.031011243916274214],
+                [-0.0526293289904421, -0.03364573717201829],
+                [-0.04696417385596965, -0.04261036227531534],
+                [-0.04629710857155981, -0.04359211542244731],
+                [-0.043075164054088615, -0.047183524716808964],
+                [-0.042381189665441174, -0.047871441123123526],
+                [-0.033322687586516415, -0.055194944242489524],
+                [-0.02600985518227418, -0.058560240697976614],
+                [-0.01851574653344049, -0.0612993241054728],
+                [-0.011655702262429197, -0.062415598229574154],
+                [-0.008913000449725825, -0.06284086162734698],
+                [-0.006978517511341289, -0.06296474248619487],
+                [-0.0013201273887233692, -0.0631890719263629],
+                [0.003372132713135802, -0.0633000543513815],
+                [0.004444101810899387, -0.06328845495138295],
+                [0.01468833021675534, -0.06276039151650353],
+                [0.015707624104049012, -0.06255300905571806],
+                [0.01869467970387998, -0.06183278736824708],
+                [0.02692221429724377, -0.05934527159439495],
+                [0.030028780382391308, -0.058274161242178865],
+                [0.0391845850819834, -0.05266287977147179],
+                [0.05062329536203323, -0.04439935617762733],
+                [0.05533527564256148, -0.03576253636817577],
+                [0.05688947052205959, -0.032837170044584536],
+                [0.05806076800748531, -0.03049932593050027],
+                [0.06089287542578277, -0.022976572216484834],
+                [0.0625794824504197, -0.014383304676557206],
+                [0.06371978696676611, -0.0040917250316540275],
+                [0.0631068110250854, 0.005957019174581528],
+                [0.06195956535044595, 0.01992353438507152],
+                [0.05418138969912875, 0.03508783139138275],
+                [0.05095422335401317, 0.03941105553280871],
+                [0.048258232910579, 0.042864726078082754],
+                [0.04046112090403264, 0.04873149403461103],
+                [0.03935181993142061, 0.04950999814624917],
+                [0.03714050051605045, 0.05054028892244977],
+                [0.026154286290988787, 0.05521207369265418],
+                [0.024666404754397117, 0.05583353420249708],
+                [0.015747483913130186, 0.057807509076270955],
+                [0.008528507528006818, 0.05910859625689236],
+                [0.006438546510349774, 0.05918209403211261],
+                [-0.011937760645581908, 0.05779335089991088],
+                [-0.013283299039465936, 0.057654561751402655],
+                [-0.025366180307117247, 0.05321267071420004],
+                [-0.02842645940262103, 0.05126700529834049],
+                [-0.04029629540518059, 0.0424381320265192]],
+ 'outline_basis': 'Convex envelope of projected RANSAC inliers inside the explicit ROI',
+ 'fit': {'rms_mm': 0.00040661156143073065, 'maximum_absolute_residual_mm': 0.0008620120556534565},
+ 'thickness': {'value_mm': 0.005,
+               'status': 'test_assumption',
+               'note': 'TECHNICAL TEST ONLY: nominal CAD mm extrusion along +normal. Hidden '
+                       'thickness and physical size are unmeasured; this slab is not the whole '
+                       'Dice.'},
+ 'limitations': ['One convex planar patch, not automatic part recognition',
+                 'The convex envelope can bridge holes or disconnected regions; inspect the '
+                 'selected patch',
+                 'Reconstruction scale and accuracy require independent measurements',
+                 'Extrusion along the signed normal is a modelling decision, not an observed '
+                 'hidden surface']}
+
+def validate(parameters):
+    if parameters.get("format") != "planar-extrusion-v1" or parameters.get("units") != "mm":
+        raise ValueError("Expected planar-extrusion-v1 parameters in mm")
+    thickness = parameters["thickness"]
+    if thickness["status"] not in {"test_assumption", "human", "measured"}:
+        raise ValueError("Thickness is unresolved: record a value, decision status, and note")
+    value = thickness["value_mm"]
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise ValueError("Thickness must be finite and positive")
+    if not thickness.get("note", "").strip():
+        raise ValueError("Thickness decision needs a note stating its basis")
+    outline = parameters["outline_mm"]
+    if len(outline) < 3 or any(len(p) != 2 or not all(math.isfinite(v) for v in p) for p in outline):
+        raise ValueError("Outline needs at least three finite 2-D vertices")
+    area = sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(outline, outline[1:] + outline[:1])) / 2
+    if area <= 1e-12:
+        raise ValueError("Outline must have positive area and counterclockwise vertex order")
+    frame = parameters["plane"]
+    origin = frame["origin_mm"]
+    axes = [frame[key] for key in ("x_axis", "y_axis", "normal")]
+    if len(origin) != 3 or not all(math.isfinite(v) for v in origin):
+        raise ValueError("Plane origin must have three finite coordinates")
+    if any(len(axis) != 3 or not all(math.isfinite(v) for v in axis) for axis in axes):
+        raise ValueError("Plane axes must have three finite coordinates")
+    dot = lambda a, b: sum(x * y for x, y in zip(a, b))
+    if any(abs(dot(a, b) - float(i == j)) > 1e-8
+           for i, a in enumerate(axes) for j, b in enumerate(axes)):
+        raise ValueError("Plane frame must be orthonormal; it will not be silently repaired")
+    x, y, normal = axes
+    cross = (x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0])
+    if dot(cross, normal) < 1 - 1e-8:
+        raise ValueError("Plane frame must be right-handed")
+    return area * value
+
+
+def make_shape(parameters):
+    validate(parameters)
+    frame = parameters["plane"]
+    plane = Plane(origin=frame["origin_mm"], x_dir=frame["x_axis"], z_dir=frame["normal"])
+    with BuildPart() as model:
+        with BuildSketch(plane):
+            # build123d flattens JSON lists; tuples are its native point contract.
+            Polygon(*(tuple(point) for point in parameters["outline_mm"]), align=None)
+        extrude(amount=parameters["thickness"]["value_mm"])
+    return model.part
+
+
+def export_and_inspect(parameters, step_path):
+    """Check native solids, placement, volume and STEP round-trip dimensions."""
+    expected_volume = validate(parameters)
+    shape = make_shape(parameters)
+    if not shape.is_valid or len(shape.solids()) != 1:
+        raise ValueError("Constructed CAD must be a valid single solid")
+    step_path = Path(step_path)
+    step_path.parent.mkdir(parents=True, exist_ok=True)
+    export_step(shape, step_path)
+    reopened = import_step(step_path)
+    if not reopened.is_valid or len(reopened.solids()) != 1:
+        raise ValueError("STEP read-back must be a valid single solid")
+    original_bounds = shape.bounding_box()
+    reopened_bounds = reopened.bounding_box()
+    # Compare min/max, not just size: a recentered export must fail this check.
+    before = [*original_bounds.min, *original_bounds.max]
+    after = [*reopened_bounds.min, *reopened_bounds.max]
+    extent = max(1.0, *map(abs, before))
+    if max(abs(a - b) for a, b in zip(before, after)) > max(1e-5, extent * 1e-8):
+        raise ValueError("STEP read-back changed scene placement or dimensions")
+    if not math.isclose(reopened.volume, expected_volume, rel_tol=1e-7, abs_tol=1e-7):
+        raise ValueError("STEP volume differs from contour area times explicit thickness")
+    return {"valid": True, "solids": len(reopened.solids()), "volume_mm3": reopened.volume,
+            "expected_volume_mm3": expected_volume,
+            "bounds_min_mm": list(reopened_bounds.min), "bounds_max_mm": list(reopened_bounds.max),
+            "world_extents_mm": list(reopened_bounds.size),
+            "thickness": parameters["thickness"], "scale": parameters["scale"],
+            "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified"}
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=Path(__file__).with_suffix(".step"))
+    args = parser.parse_args()
+    report = export_and_inspect(PARAMETERS, args.output)
+    args.output.with_suffix(".inspection.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(report))

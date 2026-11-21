@@ -1,0 +1,14 @@
+{
+  "algorithm": "HSV",
+  "hsv": {
+    "hsvHue": 0.33,
+    "hsvHueRange": 1.0,
+    "hsvMinSaturation": 0.0,
+    "hsvMaxSaturation": 0.1,
+    "hsvMinValue": 0.42,
+    "hsvMaxValue": 0.44
+  },
+  "invert": true,
+  "growRadius": 0,
+  "shrinkRadius": 0
+}

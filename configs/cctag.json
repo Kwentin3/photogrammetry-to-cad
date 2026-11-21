@@ -1,0 +1,6 @@
+{
+  "FeatureExtraction_1": {"describerTypes": ["sift", "cctag3"]},
+  "FeatureMatching_1": {"describerTypes": ["sift", "cctag3"]},
+  "StructureFromMotion_1": {"describerTypes": ["sift", "cctag3"]},
+  "DepthMap_1": {"downscale": 2}
+}

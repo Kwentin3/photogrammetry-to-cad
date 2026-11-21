@@ -1,0 +1,7 @@
+# Python 3.11; native CPU geometry and official cloud CLI.
+open3d==0.20.0
+build123d==0.13.0
+vastai==1.11.2
+numpy==2.4.6
+scipy==1.17.1
+Pillow==12.2.0
