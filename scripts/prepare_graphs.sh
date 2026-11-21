@@ -7,6 +7,12 @@ set -Eeuo pipefail
 run_root=$(realpath -e -- "$1")
 meshroom=$(realpath -e -- "$2")
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# Validate all inputs before invoking any native graph initialization. Reuse the
+# downloader's manifest and the synthetic generator's truth, without a new receipt.
+for dataset in dice cctag synthetic-markers; do
+    python3 "$repo/scripts/fetch_dataset.py" "$dataset" \
+        --output "$run_root/input/$dataset" --verify-only
+done
 source "$meshroom/env.sh"
 export OMP_NUM_THREADS=8 OPENBLAS_NUM_THREADS=8
 mkdir -p -- "$run_root/projects" "$run_root/cache"

@@ -7,6 +7,7 @@ from pathlib import Path
 import runpy
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import open3d as o3d
@@ -75,6 +76,55 @@ class GeometryBoundaryTests(unittest.TestCase):
         self.assertEqual(self.parameters["scale"]["status"], "test_assumption")
         extract.write_question(self.parameters, self.directory / "question.svg")
         self.assertIn("patch-01", (self.directory / "question.svg").read_text())
+
+    def test_negative_normal_keeps_the_same_source_plane_and_offset(self):
+        cloud = o3d.io.read_point_cloud(str(self.source))
+        points = np.asarray(cloud.points)
+        fitted = []
+
+        class OppositePlaneCloud:
+            """Native cloud and fit, with the equivalent opposite plane equation."""
+
+            def __init__(self, native):
+                self.native = native
+
+            def __getattr__(self, name):
+                return getattr(self.native, name)
+
+            def select_by_index(self, indices):
+                return OppositePlaneCloud(self.native.select_by_index(indices))
+
+            def segment_plane(self, **kwargs):
+                coefficients, indices = self.native.segment_plane(**kwargs)
+                if coefficients[np.argmax(np.abs(coefficients[:3]))] > 0:
+                    coefficients *= -1  # All four values describe the same plane.
+                fitted.append((coefficients, coefficients.copy()))
+                return coefficients, indices
+
+        roi = [*(points.min(axis=0) - .1), *(points.max(axis=0) + .1)]
+        # Only the sign representation changes; Open3D still selects and fits real points.
+        with patch.object(o3d.io, "read_point_cloud", return_value=OppositePlaneCloud(cloud)):
+            parameters = extract.extract_plane(
+                self.source, roi=roi, meters_per_unit=.01, distance_mm=.001,
+                scale_status="test_assumption", scale_note="Synthetic fixture: one source unit assigned 10 mm")
+        coefficients, original = fitted[0]
+        self.assertLess(original[np.argmax(np.abs(original[:3]))], 0)
+        self.assertGreater(abs(original[3]), 1)
+        np.testing.assert_array_equal(coefficients, original)
+        frame = parameters["plane"]
+        origin = np.asarray(frame["origin_mm"])
+        self.assertAlmostEqual(float(original[:3] @ origin + original[3]), 0, places=8)
+        expected_equation = -original / np.linalg.norm(original[:3])
+        np.testing.assert_allclose(frame["equation_mm"], expected_equation, atol=1e-8)
+        world = (origin + np.outer(np.asarray(parameters["outline_mm"])[:, 0], frame["x_axis"])
+                 + np.outer(np.asarray(parameters["outline_mm"])[:, 1], frame["y_axis"]))
+        expected = (self.origin + np.outer(self.outline[:, 0], self.x_axis)
+                    + np.outer(self.outline[:, 1], self.y_axis)) * 10
+        for vertex in expected:
+            self.assertLess(np.min(np.linalg.norm(world - vertex, axis=1)), 1e-5)
+        for vertex in world:
+            self.assertLess(np.min(np.linalg.norm(expected - vertex, axis=1)), 1e-5)
+        self.assertLess(parameters["fit"]["maximum_absolute_residual_mm"], 1e-5)
 
     def test_unresolved_thickness_blocks_before_any_export(self):
         source = self.directory / "parameters.json"

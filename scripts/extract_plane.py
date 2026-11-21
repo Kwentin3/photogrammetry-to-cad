@@ -54,7 +54,8 @@ def extract_plane(source, *, roi, meters_per_unit, distance_mm,
     support = np.asarray(patch.points)[indices]
     if len(support) < 3:
         raise ValueError("Plane has fewer than three supporting points")
-    normal = np.asarray(coefficients[:3], dtype=float)
+    # Keep the fitted equation intact when choosing the frame normal's sign.
+    normal = np.array(coefficients[:3], dtype=float, copy=True)
     normal /= np.linalg.norm(normal)
     # Choose a repeatable sign and scene axis; neither is a measured vertical.
     if normal[np.argmax(np.abs(normal))] < 0:

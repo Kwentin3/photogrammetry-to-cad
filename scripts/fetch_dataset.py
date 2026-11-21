@@ -27,6 +27,80 @@ DATASETS = {
     },
 }
 DICE_FIRST20_BYTES = 47086536
+# Inputs are flat image folders. Permit human-readable notes alongside them,
+# without guessing which additional image formats a Meshroom version can read.
+METADATA_SUFFIXES = {".json", ".txt", ".md", ".csv", ".log"}
+
+
+def check_input_entries(directory, names):
+    """Reject unlisted potential images; never remove somebody else's files."""
+    names = list(names)
+    if any(not isinstance(name, str) or not name or name in {".", ".."}
+           or "/" in name or "\\" in name or ":" in name for name in names):
+        raise ValueError("Input file names must be plain basenames")
+    if not names or len(names) != len(set(names)):
+        raise ValueError("Input file list must be nonempty and unique")
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError(f"Input must be a regular directory: {directory}")
+    for path in directory.iterdir():
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"Unexpected input entry: {path.name}")
+        if path.name not in names and path.suffix.lower() not in METADATA_SUFFIXES:
+            raise ValueError(f"Unlisted input file: {path.name}")
+
+
+def verify_input(output, name):
+    """Verify the existing download manifest or generator truth before scanning."""
+    output = Path(output)
+    if name == "synthetic-markers":
+        truth = json.loads((output / "truth.json").read_text(encoding="utf-8"))
+        if truth.get("synthetic") is not True:
+            raise ValueError("Fixture must identify itself as synthetic")
+        views = truth["views"]
+        records = []
+        for view in views:
+            path = view["file"]
+            if not isinstance(path, str) or not path.startswith("images/"):
+                raise ValueError("Fixture views must be inside images/")
+            records.append({"name": path[len("images/"):], "sha256": view["sha256"]})
+        directory = output / "images"
+    else:
+        manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+        if (manifest.get("dataset") != name or manifest.get("complete") is not True
+                or manifest.get("revision") != DATASETS[name]["revision"]):
+            raise ValueError("Input requires a complete manifest for the pinned dataset")
+        records = manifest["files"]
+        # The first full CCTag download recorded the pinned source fields in
+        # files[] only. Later manifests also retain source_files[]. Both use the
+        # same file hashes; the historical accepted input need not be rewritten.
+        selected = manifest.get("source_files", records)
+        count = len(selected)
+        expected_count = 20 if name == "dice" and manifest.get("subset") == "01.JPG..20.JPG" else DATASETS[name]["count"]
+        if count != expected_count or manifest.get("selected_count") != count:
+            raise ValueError("Manifest selection has an unexpected image count")
+        if len(records) != count:
+            raise ValueError("Manifest does not record every selected image")
+        for record, source in zip(records, selected):
+            if any(record.get(key) != source.get(key) for key in ("name", "url", "git_blob_sha1")):
+                raise ValueError("Manifest files differ from the pinned source selection")
+        directory = output
+    check_input_entries(directory, [record["name"] for record in records])
+    total = 0
+    for record in records:
+        path = directory / record["name"]
+        if not path.is_file():
+            raise ValueError(f"Missing input file: {record['name']}")
+        size, blob, sha256 = hashes(path)
+        if sha256 != record["sha256"]:
+            raise ValueError(f"Input SHA-256 differs: {record['name']}")
+        if name != "synthetic-markers" and (size != record["bytes"] or blob != record["git_blob_sha1"]):
+            raise ValueError(f"Input differs from pinned Git blob: {record['name']}")
+        total += size
+    if name != "synthetic-markers":
+        expected_bytes = DICE_FIRST20_BYTES if count == 20 else DATASETS[name]["bytes"]
+        if total != manifest["downloaded_bytes"] or total != expected_bytes:
+            raise ValueError("Input byte total differs from the selected dataset")
+    return directory, len(records)
 
 
 def request(url, timeout):
@@ -99,8 +173,9 @@ def save_manifest(output, name, files, records, total, complete=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("dataset", choices=DATASETS)
+    parser.add_argument("dataset", choices=[*DATASETS, "synthetic-markers"])
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--verify-only", action="store_true", help="Verify existing input and exit without network access")
     parser.add_argument("--limit", type=int, choices=[20], help="Dice: use the pinned first 20 images")
     parser.add_argument("--timeout", type=float, default=30, help="Per network operation, seconds")
     parser.add_argument("--deadline", type=float, default=480, help="Overall elapsed limit, seconds")
@@ -110,6 +185,12 @@ def main():
     checkout = Path(__file__).resolve().parents[1]
     if output == checkout or checkout in output.parents:
         parser.error("Photo output must be outside the source checkout")
+    if args.verify_only:
+        directory, count = verify_input(output, args.dataset)
+        print(f"Verified {args.dataset}: {count} input images in {directory}", flush=True)
+        return
+    if args.dataset == "synthetic-markers":
+        parser.error("Synthetic input is generated by make_marker_fixture.py; use --verify-only")
     if args.timeout <= 0 or args.deadline <= 0 or args.max_bytes <= 0:
         parser.error("Limits must be positive")
     info = DATASETS[args.dataset]
@@ -123,6 +204,7 @@ def main():
     if args.limit:
         files = files[:args.limit]
     output.mkdir(parents=True, exist_ok=True)
+    check_input_entries(output, [item["name"] for item in files])
     total = 0
     records = []
     save_manifest(output, args.dataset, files, records, total)
@@ -167,6 +249,7 @@ def main():
     if total != expected_bytes:
         raise ValueError(f"Unexpected dataset byte total: {total}")
     manifest_path = save_manifest(output, args.dataset, files, records, total, complete=True)
+    verify_input(output, args.dataset)
     print(f"Saved {manifest_path}", flush=True)
 
 
