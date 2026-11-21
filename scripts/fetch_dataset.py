@@ -1,9 +1,11 @@
 """Fetch a small pinned real photo set outside the source checkout (stdlib only)."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 from pathlib import Path
+import threading
 import time
 import urllib.request
 
@@ -171,6 +173,71 @@ def save_manifest(output, name, files, records, total, complete=False):
     return manifest_path
 
 
+def download_files(output, files, timeout, deadline, max_bytes):
+    """Fetch up to eight files concurrently, retaining the existing hash checks."""
+    stop = threading.Event()
+    budget_lock = threading.Lock()
+    total = 0
+
+    def reserve(size):
+        nonlocal total
+        with budget_lock:
+            if total + size > max_bytes:
+                raise ValueError("Dataset exceeds --max-bytes")
+            total += size
+
+    def download(item):
+        remaining = deadline - time.monotonic()
+        if stop.is_set() or remaining <= 0:
+            raise TimeoutError("Dataset download stopped or deadline exceeded")
+        target = output / item["name"]
+        if target.exists():
+            size, blob, sha256 = hashes(target)
+            if blob != item["git_blob_sha1"]:
+                raise ValueError(f"Existing file differs from pinned Git blob: {target}")
+            reserve(size)
+        else:
+            partial = target.with_suffix(target.suffix + ".part")
+            owned_partial = False
+            try:
+                # Exclusive creation establishes ownership before any cleanup.
+                with partial.open("xb") as stream:
+                    owned_partial = True
+                    with request(item["url"], min(timeout, remaining)) as response:
+                        while True:
+                            if stop.is_set() or time.monotonic() >= deadline:
+                                raise TimeoutError("Dataset download stopped or deadline exceeded")
+                            chunk = response.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            reserve(len(chunk))
+                            stream.write(chunk)
+                size, blob, sha256 = hashes(partial)
+                if blob != item["git_blob_sha1"]:
+                    raise ValueError(f"Download differs from pinned Git blob: {target.name}")
+                partial.replace(target)
+                owned_partial = False
+            finally:
+                if owned_partial:
+                    partial.unlink(missing_ok=True)
+        return {**item, "bytes": size, "sha256": sha256}
+
+    records = [None] * len(files)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(download, item): index for index, item in enumerate(files)}
+        try:
+            for finished, future in enumerate(as_completed(futures), 1):
+                record = future.result()
+                records[futures[future]] = record
+                print(f"{finished}/{len(files)} {record['name']} {record['bytes']} bytes verified", flush=True)
+        except BaseException:
+            stop.set()
+            for future in futures:
+                future.cancel()
+            raise
+    return records
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dataset", choices=[*DATASETS, "synthetic-markers"])
@@ -205,49 +272,11 @@ def main():
         files = files[:args.limit]
     output.mkdir(parents=True, exist_ok=True)
     check_input_entries(output, [item["name"] for item in files])
-    total = 0
-    records = []
-    save_manifest(output, args.dataset, files, records, total)
-    for item in files:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError("Dataset download deadline exceeded")
-        target = output / item["name"]
-        if target.exists():
-            size, blob, sha256 = hashes(target)
-            if blob != item["git_blob_sha1"]:
-                raise ValueError(f"Existing file differs from pinned Git blob: {target}")
-        else:
-            partial = target.with_suffix(target.suffix + ".part")
-            if partial.exists():
-                raise FileExistsError(f"Unowned partial file: {partial}")
-            try:
-                size = 0
-                with request(item["url"], min(args.timeout, remaining)) as response, partial.open("xb") as stream:
-                    while True:
-                        if time.monotonic() >= deadline:
-                            raise TimeoutError("Dataset download deadline exceeded")
-                        chunk = response.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        size += len(chunk)
-                        if total + size > args.max_bytes:
-                            raise ValueError("Dataset exceeds --max-bytes")
-                        stream.write(chunk)
-                size, blob, sha256 = hashes(partial)
-                if blob != item["git_blob_sha1"]:
-                    raise ValueError(f"Download differs from pinned Git blob: {target.name}")
-                partial.replace(target)
-            finally:
-                partial.unlink(missing_ok=True)
-        total += size
-        if total > args.max_bytes:
-            raise ValueError("Dataset exceeds --max-bytes")
-        records.append({**item, "bytes": size, "sha256": sha256})
-        save_manifest(output, args.dataset, files, records, total)
-        print(f"{len(records)}/{len(files)} {target.name} {size} bytes verified", flush=True)
+    records = download_files(output, files, args.timeout, deadline, args.max_bytes)
+    total = sum(record["bytes"] for record in records)
     if total != expected_bytes:
         raise ValueError(f"Unexpected dataset byte total: {total}")
+    check_input_entries(output, [item["name"] for item in files])
     manifest_path = save_manifest(output, args.dataset, files, records, total, complete=True)
     verify_input(output, args.dataset)
     print(f"Saved {manifest_path}", flush=True)
