@@ -1,0 +1,6 @@
+{
+  "FeatureExtraction_1": {"describerTypes": ["sift"]},
+  "FeatureMatching_1": {"describerTypes": ["sift"], "minRequired2DMotion": 2.0},
+  "StructureFromMotion_1": {"describerTypes": ["sift"]},
+  "DepthMap_1": {"downscale": 4}
+}

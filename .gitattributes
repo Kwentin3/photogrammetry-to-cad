@@ -1,0 +1,8 @@
+*.sh text eol=lf
+*.py text eol=lf
+# Keep published artifact checksums stable across Windows/Linux checkouts.
+examples/goal-2/** -text whitespace=cr-at-eol
+# Native STEP exports are preserved artifacts, not source diffs.
+examples/goal-2/**/*.step binary
+examples/goal-4/** -text whitespace=cr-at-eol
+examples/goal-4/**/*.step binary

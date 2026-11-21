@@ -1,0 +1,8 @@
+{
+  "CameraInit_1": {"defaultFieldOfView": 61.92751306414704},
+  "FeatureExtraction_1": {"describerTypes": ["sift", "cctag3"]},
+  "FeatureMatching_1": {"describerTypes": ["sift", "cctag3"]},
+  "StructureFromMotion_1": {"describerTypes": ["sift", "cctag3"]},
+  "DepthMap_1": {"downscale": 1},
+  "Meshing_1": {"maxNbConnectedHelperPoints": 0, "saveRawDensePointCloud": true}
+}

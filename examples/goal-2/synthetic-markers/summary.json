@@ -1,0 +1,142 @@
+{
+  "case": "synthetic known-metric multi-view supplementary reconstruction, not real capture",
+  "source_sha256": "6b68c0ffb756fe66648cad5dea6618dee9f83d90d0f1b8a3e81eb5938949c269",
+  "cloud_points": 15884,
+  "cloud_extents_mm": [
+    318.197,
+    237.904,
+    3.09944
+  ],
+  "source_roi": {
+    "roi_source_units": [
+      -110.0,
+      -120.0,
+      -3.0,
+      211.0,
+      121.0,
+      3.0
+    ],
+    "distance_threshold_mm": 1,
+    "iterations": 2000,
+    "seed": 42,
+    "source_points": 15884,
+    "roi_points": 15884,
+    "plane_points": 15861,
+    "support_cloud_mm": "parameters.inliers.ply"
+  },
+  "fit": {
+    "rms_mm": 0.13093553338604336,
+    "maximum_absolute_residual_mm": 0.9526610894919765
+  },
+  "contour_vertices": 29,
+  "contour_extents_mm": [
+    237.90403206020594,
+    318.19689758832993
+  ],
+  "marker_ids": [
+    0,
+    1
+  ],
+  "posed_observations": [
+    10,
+    10
+  ],
+  "native_marker_distance_mm": 100.0,
+  "same_markers_distance_in_cad_frame_mm": 100.0,
+  "length_conversion_mm_per_source_unit": 1,
+  "step_length_unit": "SI_UNIT(.MILLI.,.METRE.)",
+  "unresolved_rejection": "Thickness is unresolved: record a value, decision status, and note",
+  "reports": [
+    {
+      "valid": true,
+      "solids": 1,
+      "volume_mm3": 150866.17531884665,
+      "expected_volume_mm3": 150866.17531888915,
+      "bounds_min_mm": [
+        -108.98061102334528,
+        -118.71202753043323,
+        -0.03859659182427
+      ],
+      "bounds_max_mm": [
+        209.21700487266298,
+        119.19209282459,
+        2.088732942662002
+      ],
+      "world_extents_mm": [
+        318.19761589600824,
+        237.90412035502322,
+        2.127329534486272
+      ],
+      "thickness": {
+        "value_mm": 2,
+        "status": "test_assumption",
+        "note": "Agent technical test only: hidden thickness is unmeasured; extrusion goes along the signed normal."
+      },
+      "scale": {
+        "meters_per_source_unit": 0.001,
+        "status": "synthetic_reference",
+        "note": "Known virtual CCTag0/1 baseline 100 mm, native SfMTransform before MVS. One source unit is one mm; not a physical capture or manufacturing accuracy test."
+      },
+      "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified",
+      "parameters_sha256": "74c79113de761a86f26f9b6d9121b306c9f55b4cb9d8083e36011454d3c1f091",
+      "independent_cloud_outline_to_step_bounds_error_mm": 1.1965539670200087e-11
+    },
+    {
+      "valid": true,
+      "solids": 1,
+      "volume_mm3": 377165.4382970954,
+      "expected_volume_mm3": 377165.43829722283,
+      "bounds_min_mm": [
+        -108.9817216402132,
+        -118.71202753043323,
+        -0.03859659182427
+      ],
+      "bounds_max_mm": [
+        209.21700487266298,
+        119.19222561644,
+        5.088732734145
+      ],
+      "world_extents_mm": [
+        318.1987265128762,
+        237.90425314687323,
+        5.12732932596927
+      ],
+      "thickness": {
+        "value_mm": 5,
+        "status": "test_assumption",
+        "note": "Agent technical test only: hidden thickness is unmeasured; extrusion goes along the signed normal."
+      },
+      "scale": {
+        "meters_per_source_unit": 0.001,
+        "status": "synthetic_reference",
+        "note": "Known virtual CCTag0/1 baseline 100 mm, native SfMTransform before MVS. One source unit is one mm; not a physical capture or manufacturing accuracy test."
+      },
+      "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified",
+      "parameters_sha256": "17af97784211493c3894fe89b6c3c988fb931b522147f5e5b17914473bb66f69",
+      "independent_cloud_outline_to_step_bounds_error_mm": 1.1965539670200087e-11
+    }
+  ],
+  "volume_ratio": 2.4999999999998592,
+  "only_parameter_changed": "thickness; all other source-derived JSON fields identical",
+  "limitations": [
+    "Known virtual source dimensions 320x240 are comparison only; not used to fit a rectangle or crop 3D geometry.",
+    "Convex envelope of the observed selected planar inliers, not the original rectangular board or inferred complete part.",
+    "Thickness2/5mm is an agent test decision, not a human answer or measured hidden surface.",
+    "Metric transfer is technical on synthetic views, not calibrated real capture accuracy."
+  ],
+  "published_files": {
+    "model.py": "ff60143dd4ac1fae777434c8baa4a5d45b958e18f9ceb9d38e5a8fee3fb923ef",
+    "model.step": "569ebced1ad3b378f50a5b19729bc5c024f7c9bd5b98f12f952f43b1066a16b5",
+    "changed.step": "fe00fc11e9898ddb063567840d474fb5e816cd0f0475e03624eea9c2caed69bd",
+    "parameters.json": "74c79113de761a86f26f9b6d9121b306c9f55b4cb9d8083e36011454d3c1f091",
+    "parameters-unresolved.json": "9fab6197aa0f0bf957f15104332dc7ad49bbeec8df35788a369dfd486ae36b92",
+    "parameters-changed.json": "17af97784211493c3894fe89b6c3c988fb931b522147f5e5b17914473bb66f69",
+    "question.svg": "e4f43fa0ce5a8667249cbe71737dfdeb599a2add86ae2b44e1af0c8ba5569836",
+    "inspection.json": "e23b5ea3258590dbbe63caa1931b83d9d602ae3723e11bdf6db6b87c28961be0",
+    "changed.inspection.json": "5acec8cdab0e1afcebfcdf9d3ab5a4403b8838ce94f10003320dc545d13c8029",
+    "qa-preview.png": "6d6ff28b5f32c7e087b3aa673aa068f71e0cb59dcc2e195675d21f7747dc0159"
+  },
+  "publication_note": "Selected small files copied from accepted local run; full clouds/cache/logs and full run summary are retained outside Git.",
+  "question_generation_code_sha256": "d18b602841439e7c154c02ef5866e507cf1b295857e8fd84c31cf548d9fa52db",
+  "question_generation_note": "SVG regenerated after clarifying unverified units as nominal CAD mm. AST of geometry functions unchanged from the accepted run; run source retained outside Git."
+}

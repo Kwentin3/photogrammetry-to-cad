@@ -1,0 +1,17 @@
+{
+  "meshroom_revision": "b12ea8896e7e95cc9911b4ec39c272914e4da726",
+  "alicevision_revision": "d012d05589b528dcf57a2a0c805c0a5709df8613",
+  "archive_name": "Meshroom-2026.11.21-b12ea88-linux-full.tar.gz",
+  "archive_bytes": 600156630,
+  "archive_sha256": "4ca3cfb0898b8000def4e68d513468a199b948329b63cdb6b257e427d295163b",
+  "bundle_directory": "Meshroom-2026.11.21-b12ea88-linux",
+  "retained_copy_relative_to_checkout": "../photogrammetry-to-cad-work/runtime-archives/Meshroom-2026.11.21-b12ea88-linux-full.tar.gz",
+  "upstream_url": "https://github.com/alicevision/Meshroom/releases/download/nightly/Meshroom-2026.11.21-b12ea88-linux-full.tar.gz",
+  "upstream_url_retention": "Rolling asset can be deleted; use the retained owner copy and verify SHA256",
+  "cuda_toolkit": "12.8.0",
+  "minimum_host_driver": "570.26",
+  "minimum_cuda_max_good": 12.8,
+  "image": "nvidia/cuda@sha256:ccc7187c865488c45eb2555d2d3634235aeda5b7a1de4a6dc29d031c7abd997e",
+  "image_tag_reference": "nvidia/cuda:12.8.0-runtime-ubuntu24.04",
+  "image_platform": "linux/amd64"
+}

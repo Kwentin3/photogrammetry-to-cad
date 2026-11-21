@@ -1,0 +1,29 @@
+{
+  "format": "goal4-cad-artifact-sha256-v1",
+  "scope": "Delivered small CAD examples; raw clouds and private evidence excluded",
+  "sha256": {
+    "README.md": "dc5d27a32269b41aa2b0bd3a06558fb454f8d0efdf414606887bda9496ecf52a",
+    "real-dice/changed.inspection.json": "7208a89c8e4d5bfac785aac1fb1b0e6ee637c13c9102113b1aa588fc05534900",
+    "real-dice/changed.step": "ffd85d08b954387b62a912e13caddb46ce1f6a30331c15af68e73fe806f167f4",
+    "real-dice/inspection.json": "6de714f552fd468884b45ec6540eb47203b22ef275e2b8d7a384918ec8bdc5a8",
+    "real-dice/model.py": "7661e78374c908272755b4309058d43fd6acafb0efde396c2fc9db4a8975b98f",
+    "real-dice/model.step": "affcfa89d15b0811ad31cad9dc41b0e371cbf6030a8f5a5cba521005632bea66",
+    "real-dice/parameters-changed.json": "7903aff3b3d5373a9c05f8d76fa0f8c90f347295ff0d151e7c200fd05c38a582",
+    "real-dice/parameters-unresolved.json": "8aa06e87a75430630c78ec051a28967dee63fd6b4a0fdcfd8d759d088f011614",
+    "real-dice/parameters.json": "7e87984fec08bd8687d616b769b7cab7aa08523bc46a48a9602fac717dda366b",
+    "real-dice/qa-preview.png": "995a15b6b5bbf3936a00039e4994ff02ffe3a1b6847c28c568f1e1db579a232a",
+    "real-dice/question.svg": "526c24d33af3e708786edcee3b4536eae6ebd6949dbe36155f8bea9e64fa26d0",
+    "real-dice/summary.json": "e2bf8310509b243075741fd72b7199d5417210a5ab07289095fd9a8a164a34ca",
+    "synthetic-markers/changed.inspection.json": "cf47d3a0f0b3baa31a86048ef985ecfdc46f07274a81b86692b642880f64baf1",
+    "synthetic-markers/changed.step": "c6a61ec24db2c28e9205bb9299ab0387d033366c16c08dc76de726dbda81f42f",
+    "synthetic-markers/inspection.json": "96639226de088492c6fa62ece71f426961efc7747c1713cc69300068b211c9f7",
+    "synthetic-markers/model.py": "68f4cb099504880c9b3b23d02f44b5d44429b6ec5d48bb0e4865e189bd10c436",
+    "synthetic-markers/model.step": "caaec5c10fe823fe9255ac7758ef7e72369b45701880cf6e5b4cea32bcff21d4",
+    "synthetic-markers/parameters-changed.json": "19a13d64f700acfc95c50e5db1ad495a8d68827ffdb5d2c11470cb819504c5e1",
+    "synthetic-markers/parameters-unresolved.json": "0705463b82f8a21688d19a1b330725fff0fba7bac111d1ab0ebe525fed5256ad",
+    "synthetic-markers/parameters.json": "eb3f3b3dd46911bc7f9574ad294150608a6f845b5825f89be7a8d5c4bdae7b8b",
+    "synthetic-markers/qa-preview.png": "05e6230d6ad93225d73cb02b5fc4881600394b52ccb528a5126cd3b1337b111f",
+    "synthetic-markers/question.svg": "3af3e7a3ccbe690918fa8704d31ad3a9b5fd3bbfcef6354cef417385ed36384c",
+    "synthetic-markers/summary.json": "efb66123df99bfbfb28ee1066c7e75290ae8a47d495488f77270cc56569d5a2a"
+  }
+}

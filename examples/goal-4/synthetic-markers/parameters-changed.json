@@ -1,0 +1,176 @@
+{
+  "format": "planar-extrusion-v1",
+  "part_id": "synthetic-board-observed-patch",
+  "units": "mm",
+  "source": {
+    "filename": "Meshing_1.ply",
+    "sha256": "c250cd5fa55b19ee3a6665549865dc05ada4472a7a590f3f5e70c01260fb03f1",
+    "binding": "Checksum of the observed input file; not proof of origin or authenticity"
+  },
+  "scale": {
+    "meters_per_source_unit": 0.001,
+    "status": "synthetic_reference",
+    "note": "Known VIRTUAL CCTag0/1 baseline 100 mm, native SfMTransform before MVS. One source unit is one mm by explicit application convention; not calibrated physical capture accuracy."
+  },
+  "selection": {
+    "roi_source_units": [
+      -158.63400099999998,
+      -118.697001,
+      -1.3407209999999998,
+      159.350001,
+      119.148001,
+      1.5286609999999998
+    ],
+    "distance_threshold_mm": 1.0,
+    "iterations": 2000,
+    "seed": 42,
+    "source_points": 15659,
+    "roi_points": 15659,
+    "plane_points": 15622,
+    "support_cloud_mm": "parameters-unresolved.inliers.ply",
+    "note": "Full observed source bounds expanded by epsilon; no crop to the ideal virtual board, rectangle fitting or angle constraints."
+  },
+  "plane": {
+    "origin_mm": [
+      -31.459206290724612,
+      -13.856690878949502,
+      0.027415799839796435
+    ],
+    "x_axis": [
+      4.1054819575758494e-09,
+      0.9999999999735145,
+      -7.278120919008779e-06
+    ],
+    "y_axis": [
+      -0.9999998409038527,
+      0.0,
+      -0.0005640853387976714
+    ],
+    "normal": [
+      -0.0005640853387827313,
+      7.278122076929961e-06,
+      0.9999998408773672
+    ],
+    "equation_mm": [
+      -0.0005640853387827313,
+      7.278122076929961e-06,
+      0.9999998408773672,
+      -0.045060621827862135
+    ],
+    "frame_basis": "Deterministic scene-axis projection; no independent vertical measurement"
+  },
+  "outline_mm": [
+    [
+      133.00469128473938,
+      -159.9922000214055
+    ],
+    [
+      132.84869227193357,
+      97.16091740208226
+    ],
+    [
+      131.47068794215414,
+      126.76158653232937
+    ],
+    [
+      115.50669066227258,
+      126.88479733988154
+    ],
+    [
+      107.3939902382635,
+      126.92476446708542
+    ],
+    [
+      79.80848656280229,
+      127.00847955993902
+    ],
+    [
+      -23.262407850663422,
+      127.16291235304193
+    ],
+    [
+      -52.93260933515843,
+      127.17479723936583
+    ],
+    [
+      -76.09650929986753,
+      127.09979991507825
+    ],
+    [
+      -103.22930877664899,
+      126.90484038002113
+    ],
+    [
+      -104.38030883051276,
+      126.06483606934633
+    ],
+    [
+      -104.60430906621323,
+      117.26581640121
+    ],
+    [
+      -104.84031019657698,
+      -12.543191859372946
+    ],
+    [
+      -104.57130991269541,
+      -143.1612906376315
+    ],
+    [
+      -104.38731042027737,
+      -186.56233688194843
+    ],
+    [
+      -103.67830991341677,
+      -187.63529776735052
+    ],
+    [
+      -101.30730846391607,
+      -189.40118570097465
+    ],
+    [
+      -99.61730914318885,
+      -189.53323836503694
+    ],
+    [
+      -90.20230881107321,
+      -190.08121269252075
+    ],
+    [
+      -42.97860975307169,
+      -190.63128569197576
+    ],
+    [
+      93.83099175174203,
+      -190.80916880999416
+    ],
+    [
+      125.18969130151214,
+      -190.60920360853638
+    ],
+    [
+      128.54769279306484,
+      -190.24908794268836
+    ],
+    [
+      132.5736896659859,
+      -188.9923300963607
+    ]
+  ],
+  "outline_basis": "Convex envelope of projected RANSAC inliers inside the explicit ROI",
+  "fit": {
+    "rms_mm": 0.13198435823305749,
+    "maximum_absolute_residual_mm": 1.0834921104189863
+  },
+  "thickness": {
+    "value_mm": 5.0,
+    "status": "test_assumption",
+    "note": "AGENT TECHNICAL TEST ONLY, not a human answer. Hidden thickness is unmeasured; extrusion goes along the signed source-derived normal."
+  },
+  "limitations": [
+    "One convex planar patch, not automatic part recognition",
+    "The convex envelope can bridge holes or disconnected regions; inspect the selected patch",
+    "Reconstruction scale and accuracy require independent measurements",
+    "Extrusion along the signed normal is a modelling decision, not an observed hidden surface"
+  ]
+}

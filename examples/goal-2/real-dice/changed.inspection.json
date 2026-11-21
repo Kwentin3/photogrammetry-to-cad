@@ -1,0 +1,33 @@
+{
+  "valid": true,
+  "solids": 1,
+  "volume_mm3": 0.0001520968124541141,
+  "expected_volume_mm3": 0.00015209681245427172,
+  "bounds_min_mm": [
+    -0.15048114812202537,
+    -0.11951979510556283,
+    -0.06150639653388
+  ],
+  "bounds_max_mm": [
+    -0.027452615832087097,
+    0.0032558103190169305,
+    -0.041217176288263234
+  ],
+  "world_extents_mm": [
+    0.12302853228993828,
+    0.12277560542457977,
+    0.020289220245616767
+  ],
+  "thickness": {
+    "value_mm": 0.0125,
+    "status": "test_assumption",
+    "note": "TECHNICAL TEST ONLY: nominal CAD mm extrusion along +normal. Hidden thickness and physical size are unmeasured; this slab is not the whole Dice."
+  },
+  "scale": {
+    "meters_per_source_unit": 0.001,
+    "status": "unverified",
+    "note": "PHYSICAL SCALE UNKNOWN. Identity representation only: 1 source arbitrary unit = 1 NOMINAL CAD mm (meters_per_unit=.001). This is not a measured millimetre, metric calibration, or physical dimension of the real Dice. All mm/mm2/mm3 labels in this example are nominal CAD units only."
+  },
+  "claim": "Technical CAD validity only; physical accuracy and hidden surfaces are not verified",
+  "parameters_sha256": "9df9b4626c7b343bf23874a1a55d24ba83b333229cf604cfb76b039dec056db2"
+}
