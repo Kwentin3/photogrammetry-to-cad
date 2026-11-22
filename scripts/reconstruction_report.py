@@ -8,6 +8,7 @@ still belongs to the native graph and its saved output route.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -153,7 +154,54 @@ def cloud_summary(path):
             "coordinate_frame": "native PLY; cloud lineage is recorded by the native graph"}
 
 
-def report(scene_path, cloud_path, settings_path, manifest_path=None, scale_evidence_path=None):
+def mesh_summary(path, cloud, scale):
+    """Read the separate raw Meshing surface; preserve the source mesh bytes."""
+    import numpy as np
+    import open3d as o3d
+
+    path = Path(path).resolve(strict=True)
+    # Open3D's OBJ reader on Windows can fail on an absolute Unicode path.
+    # Reading its native ASCII basename from the owning directory also preserves
+    # relative material references. This CLI is synchronous; always restore cwd.
+    previous = Path.cwd()
+    try:
+        os.chdir(path.parent)
+        mesh = o3d.io.read_triangle_mesh(path.name, enable_post_processing=False)
+    finally:
+        os.chdir(previous)
+    vertices, faces = np.asarray(mesh.vertices), np.asarray(mesh.triangles)
+    if not len(vertices) or not len(faces):
+        raise ValueError('Mesh has no readable vertices/triangles; a point cloud is not a mesh')
+    if not np.isfinite(vertices).all():
+        raise ValueError('Mesh contains nonfinite vertex coordinates')
+    if faces.min() < 0 or faces.max() >= len(vertices):
+        raise ValueError('Mesh contains invalid triangle vertex indices')
+    result = {'vertex_count': len(vertices), 'triangle_count': len(faces),
+              'finite_vertex_count': len(vertices), 'invalid_index_count': 0,
+              'bbox_min': vertices.min(axis=0).tolist(), 'bbox_max': vertices.max(axis=0).tolist(),
+              'units': scale['units'], 'processing': 'raw native Meshing output; no filtering/smoothing',
+              'count_scope': 'Open3D loaded mesh; importer can merge coincident OBJ vertices',
+              'coordinate_frame': 'as stored by native mesh writer; distinct from dense PLY axes'}
+    if path.suffix.lower() == '.obj':
+        # Pinned Mesh::save writes (x,-y,-z), whereas sfmDataIO PLY writes X.
+        # This is a fixed rotation from the native contract, not a fitted alignment.
+        aligned = vertices * np.array([1., -1., -1.])
+        lower, upper = aligned.min(axis=0), aligned.max(axis=0)
+        result['mesh_to_cloud'] = {
+            'rotation': [[1., 0., 0.], [0., -1., 0.], [0., 0., -1.]],
+            'translation': [0., 0., 0.], 'scale': 1.,
+            'basis': 'AliceVision d012d055 Mesh::save OBJ / sfmDataIO PLY',
+            'applied_to_file': False, 'bbox_min_in_cloud_frame': lower.tolist(),
+            'bbox_max_in_cloud_frame': upper.tolist(),
+            'bbox_delta_max': float(max(np.max(np.abs(lower - cloud['bbox_min'])),
+                                        np.max(np.abs(upper - cloud['bbox_max'])))),
+            'scope': 'coordinate convention and observed bounds; not object coverage or physical accuracy'}
+    else:
+        result['mesh_to_cloud'] = {'status': 'unverified_for_this_format', 'applied_to_file': False}
+    return result
+
+
+def report(scene_path, cloud_path, settings_path, manifest_path=None, scale_evidence_path=None, mesh_path=None):
     inputs = {"scene": artifact(scene_path), "cloud": artifact(cloud_path),
               "settings": artifact(settings_path)}
     settings = read_json(settings_path)
@@ -166,9 +214,16 @@ def report(scene_path, cloud_path, settings_path, manifest_path=None, scale_evid
     # Validate scale before importing Open3D or reading the potentially large cloud.
     scale = verified_scale(settings, inputs["scene"], scale_evidence_path)
     scene = scene_summary(read_json(scene_path))
-    return {"schema_version": 1, "status": "reported",
-            "runtime": settings.get("runtime", {}), "inputs": inputs,
-            "scene": scene, "scale": scale, "cloud": cloud_summary(cloud_path)}
+    result = {"schema_version": 1, "status": "reported",
+              "runtime": settings.get("runtime", {}), "inputs": inputs,
+              "scene": scene, "scale": scale, "cloud": cloud_summary(cloud_path)}
+    if mesh_path is not None:
+        inputs['mesh'] = artifact(mesh_path)
+        binding = settings.get('mesh_export')
+        if binding and binding['sha256'] != inputs['mesh']['sha256']:
+            raise ValueError('Mesh differs from saved native export SHA-256')
+        result['mesh'] = mesh_summary(mesh_path, result['cloud'], scale)
+    return result
 
 
 def main():
@@ -176,6 +231,7 @@ def main():
     parser.add_argument("--scene", type=Path, required=True,
                         help="Native canonical JSON with views/poses/intrinsics/CCTag3 observations")
     parser.add_argument("--cloud", type=Path, required=True, help="Native dense PLY exported after backup")
+    parser.add_argument("--mesh", type=Path, help="Separate raw native Meshing outputMesh (OBJ qualified)")
     parser.add_argument("--settings", type=Path, required=True, help="Effective settings and scale evidence paths")
     parser.add_argument("--manifest", type=Path,
                         help="Explicit local copy of input manifest; preserve its settings SHA-256 binding")
@@ -188,7 +244,7 @@ def main():
     if output == checkout or checkout in output.parents:
         parser.error("Write reconstruction evidence outside the source checkout")
     protected = {args.scene.resolve(), args.cloud.resolve(), args.settings.resolve()}
-    protected.update(path.resolve() for path in (args.manifest, args.scale_evidence) if path is not None)
+    protected.update(path.resolve() for path in (args.manifest, args.scale_evidence, args.mesh) if path is not None)
     if output in protected:
         parser.error("Output must differ from every input and scale evidence artifact")
     try:
@@ -198,7 +254,7 @@ def main():
                 protected.add(Path(value).resolve())
         if output in protected:
             parser.error("Output must differ from every input and scale evidence artifact")
-        result = report(args.scene, args.cloud, args.settings, args.manifest, args.scale_evidence)
+        result = report(args.scene, args.cloud, args.settings, args.manifest, args.scale_evidence, args.mesh)
     except (ValueError, KeyError, TypeError, AttributeError, OverflowError, OSError, RuntimeError) as error:
         result = {"schema_version": 1, "status": "error", "error": str(error)}
     result["output_file"] = str(output)

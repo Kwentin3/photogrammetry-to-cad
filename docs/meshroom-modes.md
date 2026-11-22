@@ -1,8 +1,27 @@
 # Режимы закреплённой Meshroom 2026
 
-Это справочник возможностей для выбора режима. Команды подготовки, запуска,
-продолжения и сохранения результата находятся в [runbook](runbook.md).
-Состояние текущей работы — в [Goal #6](goal-6.md).
+Это точка выбора сценария **фото/видео → фотограмметрическая геометрия**.
+Команды общего запуска, наблюдения, продолжения и сохранения результата —
+в [runbook](runbook.md); текущий аудит — [Goal #8](goal-8.md).
+CAD и распознавание деталей — следующие отдельные этапы.
+
+| Что нужно получить / как снято | Выбрать | Подробности |
+|---|---|---|
+| Обычные фото неподвижной сцены → облако и исходная сетка | Standard; до штатного Meshing, оба выхода создаются вместе | [Фото и граф](#фото-и-обычная-сцена), [выходы](#облако-и-исходная-сетка) |
+| Видео → те же результаты | KeyframeSelection, затем Standard | [Кадры видео](#видео-и-выбор-кадров) |
+| Нужны CCTag или запасной SfM | Legacy | [Фото и граф](#фото-и-обычная-сцена), [масштаб](#масштаб-и-ориентация) |
+| Нужно исключить фон | Готовые маски, ImageMasking либо дополнительная ML-сегментация | [Маски](#маски-и-сегментация) |
+| Объект вращается на столе | Маски **до признаков/SfM**, либо ObjectTurntable с дополнением | [Стол и переворот](#поворотный-стол-и-две-стороны) |
+| Объект перевёрнут для съёмки низа | Две отдельные группы → ObjectTwoSides | [Стол и переворот](#поворотный-стол-и-две-стороны) |
+| Удалить лишние части сетки / сгладить | Продолжить проект до MeshFiltering с явными настройками | [Фильтрация](#фильтрация-сетки) |
+| Нужна модель с фотографической текстурой | Продолжить проект до Texturing, сохранить весь комплект | [Текстуры и экспорт](#текстуры-и-экспорт) |
+| Иная задача из списка шаблонов | Сначала проверить её домен и зависимости | [Остальные шаблоны](#остальные-шаблоны-комплекта) |
+
+Статусы различаем буквально: **выполнено** — есть фактические результаты;
+**рецепт** — проверены файлы/контракты, но этот режим не вычислялся;
+**нужно дополнение/данные** — сначала устранить названный пробел.
+Наличие шаблона, успешное чтение графа и локальный тест не означают выполненную
+реконструкцию. Масштаб без измеренного источника остаётся неизвестным.
 
 ## Что проверено в комплекте
 
@@ -26,23 +45,258 @@ Standard. Backup проверен локально, аренда удалена;
 Факты и ограничения — в [отчёте фото/видео → 3D](reports/2026-11-21/photo-video-3d.md).
 Историческая проверка Legacy описана отдельно в [отчёте Goal #4](reports/2026-11-21/meshroom-2026.md).
 
-## Выбор по съёмке
+## Фото и обычная сцена
 
-| Съёмка или задача | Штатный путь и требования | Статус и решение сейчас |
+Нужны перекрывающиеся резкие фотографии неподвижного жёсткого объекта,
+различимые детали поверхности и разные точки наблюдения. Фото, полученные
+из видео, имеют тот же контракт после отбора. Блики, прозрачность, движение,
+одинаковые повторяющиеся поверхности и невидимые стороны остаются источниками
+пропусков; увеличение числа точек их не устраняет.
+
+| Путь | Вход → основные настройки → выход | Наличие и фактическая проверка |
 |---|---|---|
-| Неподвижный объект или сцена | `photogrammetry.mgt`: новый модульный SfM, IntrinsicsTransforming и ExportImages, затем DepthMap → DepthMapFilter → Meshing. Нужны перекрывающиеся резкие кадры с различимыми деталями поверхности | **Базовый путь проверен на 37 реальных кадрах: 37/37 камер, 121291 конечная точка.** Выбран для обычного фото/видео: сопоставимый наблюдаемый охват без PDS adapter; физическая точность не измерялась |
-| Тот же материал через Legacy | `photogrammetryLegacy.mgt`: StructureFromMotion → PrepareDenseScene → плотная реконструкция | **Проверен на тех же кадрах: 37/37 камер, 121513 конечных точек.** Запасной путь и основа для CCTag; один явный whole-scene PDS adapter сохранён, затем native compute и неизменность EXR подтверждены |
-| Готовые маски объекта | FeatureExtraction принимает masksFolder; Legacy PrepareDenseScene и новый ExportImages — masksFolders. Маски должны соответствовать исходным кадрам по размеру и имени либо view UID | **Доступно в архиве; изучено.** Передавать маски отдельной настройкой. Для поворотного стола исключать фон уже при выделении признаков |
-| Простой однотонный фон | ImageMasking: HSV либо AutoGrayscaleThreshold; есть инверсия и изменение границ. MaskProcessing/MaskEroding обрабатывают готовые маски | **Доступно в архиве; изучено.** Возможный вариант без ML при подходящем фоне; качество маски проверять на кадрах |
-| Автоматическое отделение обычного объекта | `photogrammetryObject.mgt` использует ImageDetectionPrompt → ImageSegmentationBox; маска применяется перед плотной стадией | **Шаблон доступен в архиве; изучено.** Эти segmentation nodes и веса в архив не входят. Дополнение не включаем в базовую установку без конкретной необходимости |
-| Поворотный стол | `photogrammetryObjectTurntable.mgt` добавляет segmentation mask в FeatureExtraction до SfM. Жёсткий объект вращается, неподвижный фон должен исключаться из признаков | **Шаблон доступен в архиве; изучено.** Требует отсутствующего segmentation plugin либо явной настройки уже готовых масок; фактический прогон не выполнен |
-| Объект с переворотом, две стороны | `photogrammetryObjectTwoSides.mgt`: отдельные съёмки/SfM, признаки объекта под масками, сопоставление сторон, SfMMerge `from_landmarks`, повторная триангуляция. Нужны общие видимые участки самого объекта | **Шаблон доступен в архиве; изучено.** Маски/дополнение и отдельный прогон обязательны перед объявлением режима проверенным |
-| Реальное видео | KeyframeSelection выбирает кадры; дальше используется выбранный фотограмметрический граф. Требуются резкость, перекрытие и изменение точки наблюдения | **Regular отбор и реконструкция проверены:** настоящий Objectron MOV → 37 кадров → плотное PLY обоими графами. Source SHA/native views/точные файлы связаны manifest; smart selection отдельно не запускался |
-| Метки и известный размер | Есть CCTag features и SfMTransform. Неизвестный масштаб сохраняется неизвестным; координаты меток и измеренное расстояние между двумя метками — разные входные контракты | **CCTag сохраняется в Legacy.** Native scalar scale проверен на историческом synthetic SfM, не на новой измеренной рулеткой базе. Standard CCTag ID encoding не квалифицирован, общий adapter отвергает этот путь. Marker_coords зарезервирован; исторический native XYZ-рецепт отдельный |
+| [Standard: photogrammetry.mgt][standard] | CameraInit с фото → модульный SfM, IntrinsicsTransforming/ExportImages → DepthMap/DepthMapFilter → Meshing. Настройки: FOV при отсутствии калибровки, describerPreset/Quality, DepthMap.downscale, Meshing.maxInputPoints/maxPoints | В комплекте. **Выполнено** в #6: 37/37 камер, 121291 точка; базовый путь без PDS adapter. Физическая точность неизвестна |
+| [Legacy: photogrammetryLegacy.mgt][legacy] | Те же фото → StructureFromMotion/PrepareDenseScene → DepthMap/DepthMapFilter/Meshing. Для CCTag используются cctag3 и отдельный контракт масштаба | В комплекте. **Выполнено** на тех же кадрах: 37/37 камер, 121513 точек; один whole-scene PDS adapter. Это fallback, не доказательство большей точности |
 
-Шаблоны лежат в `aliceVision/share/meshroom/` внутри архива;
-[точные исходники этих шаблонов и AV nodes](https://github.com/alicevision/AliceVision/tree/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom)
-закреплены тем же revision.
+Простой поддерживаемый запуск — [runbook](runbook.md): входы и настройки
+меняются через обычный JSON. Полный штатный граф сохраняется; вычисление
+до Meshing не требует выполнять MeshFiltering/Texturing/CopyFiles.
+Файлы шаблонов и descriptors — `aliceVision/share/meshroom/` внутри runtime.
+Для нестандартного графа есть штатные [meshroom_batch][batch] и
+[meshroom_compute][compute], без расширения списка режимов общей обвязки.
+
+## Видео и выбор кадров
+
+Нужно обходить объект с перекрытием и изменением точки наблюдения: панорамный
+поворот камеры с одного места не даёт глубину. KeyframeSelection принимает
+`inputPaths` (видео, каталог последовательности или SfMData), сведения о камере
+`brands/models/mmFocals` при наличии; для видео `outputExtension` должен быть
+`jpg`, `png` или `exr`, не `none`. Выходы — выбранные изображения,
+`outputSfMDataKeyframes` и диагностические оценки, если включены.
+`outputSfMDataFrames` с невыбранными views создаётся для последовательности
+изображений; при видео невыбранные кадры не записываются и этого файла нет.
+
+| Отбор | Когда и настройки | Статус / запуск |
+|---|---|---|
+| Regular | Предсказуемый шаг кадров: `selectionMethod.useSmartSelection=false`, `regularSelection.minFrameStep/maxFrameStep/maxNbOutFrames` внутри selectionMethod. Ограничение maxNbOutFrames вместе с шагом может оборвать охват до конца ролика | **Выполнено** в #6: Objectron MOV → 37 кадров → оба плотных результата. Готовые команды и manifest — [runbook](runbook.md) |
+| Smart | Неравномерное движение и резкость: `selectionMethod.useSmartSelection=true`, `smartSelection.pxDisplacement/minNbOutFrames/maxNbOutFrames`; scores используют sharpness и optical flow. `maskPaths` при необходимости исключают фон из оценки | **Рецепт**, bundled node, без ML-дополнения. Штатные имена и полные параметры — [pinned KeyframeSelection.py][keyframes]. Нового smart-прогона не было |
+
+Для smart используется тот же этап подготовки видео из runbook с выбором smart
+и его параметрами; затем выбранные файлы поступают в обычную реконструкцию.
+До дорогого расчёта просмотреть выбранные кадры: резкость, охват начала/конца,
+ракурсы и пропуски. SfMData views и manifest должны описывать именно эти файлы.
+Старая [страница руководства](https://meshroom-manual.readthedocs.io/en/latest/feature-documentation/nodes/KeyframeSelection.html)
+описывает прежние параметры; для этого runtime приоритет у pinned descriptor.
+
+## Маски и сегментация
+
+Маска сохраняет объект ненулевыми пикселями, исключает фон нулями. Проверяются
+полное покрытие кадров, имена (`viewId`, затем stem исходника), размеры и
+полярность. Ручная подготовка допустима; её объём записывается.
+
+| Путь | Когда / входы / основные настройки / выход | Запуск, комплект и статус |
+|---|---|---|
+| Готовые маски | Любой способ получения масок → FeatureExtraction.masksFolder при исключении фона из SfM; ExportImages.masksFolders либо Legacy PrepareDenseScene.masksFolders для плотной стадии, с явным maskExtension. Выход — признаки объекта и EXR с alpha | Настройки `masks.folder/extension/features/invert` в [runbook](runbook.md). **Рецепт**; входные проверки локальные, masked GPU-реконструкция не выполнена. Общий путь не поддерживает частичные наборы; masked Standard отдельно не квалифицирован |
+| [ImageMasking][masking] | Однотонный фон: CameraInit.output → ImageMasking.input; algorithm=HSV (hsvHue/Range, Saturation/Value) либо AutoGrayscaleThreshold; invert, growRadius/shrinkRadius. Выход — каталог масок | В комплекте без ML. **Рецепт**: добавить node в сохранённый граф в GUI, связать CameraInit.output с input, вычислить до него, проверить маски и передать в предыдущую строку. [MaskProcessing][maskprocessing]/[MaskEroding][maskeroding] — дополнительные штатные операции над масками |
+| [photogrammetryObject.mgt][object] | Неподвижный объект на сложном фоне: фото → ImageDetectionPrompt (`prompt`, `synonyms`, thresholdDetection) → ImageSegmentationBox → masks в PrepareDenseScene. Признаки исходного SfM здесь **не** маскированы | **Нужно дополнение** [mrSegmentation][segmentation], его зависимости и веса RAM++/GroundingDINO/SAM. Шаблон есть, nodes/веса отсутствуют в полном архиве. После установки: штатный batch с этим pipeline, ввод в CameraInit_1, остановка до нужного узла. Не выполнялось |
+
+До применения HSV/ML проверить кадры с тонкими краями, отверстиями, тенями и
+цветами, похожими на фон. Неправильная маска удаляет данные, которые движок
+не восстановит. Не устанавливать ML ради обычной съёмки без проблемы фона.
+
+## Поворотный стол и две стороны
+
+Поворотный стол меняет движение объекта относительно неподвижного фона.
+Для SfM нужны признаки **самого объекта**; фон исключают уже в FeatureExtraction.
+Обсуждение [#1757](https://github.com/alicevision/Meshroom/issues/1757)
+с ответом участника команды Meshroom указывает на новые object/turntable-шаблоны;
+оно не подтверждает результат на наших данных.
+
+| Сценарий | Штатный граф, данные и настройки | Выход, дополнение и статус |
+|---|---|---|
+| [photogrammetryObjectTurntable.mgt][turntable] | Один жёсткий объект, круги с разных высот, фон под маской. CameraInit_1 → detection/segmentation → FeatureExtraction_1.masksFolder; далее Legacy SfM/PDS и dense. Настроить prompt/маски до расчёта | Meshing_1.output + outputMesh, затем при необходимости filtering/texturing. **Нужно mrSegmentation и веса; рецепт без выполнения**. Вариант без ML — готовые маски с features=true в общем Legacy-пути; это отдельный рецепт, также не квалифицированный реальным запуском |
+| [photogrammetryObjectTwoSides.mgt][twosides] | Два раздельных набора одного жёсткого объекта до/после переворота с общими различимыми участками поверхности. CameraInit_1 и _2, две сегментации; раздельные SfM, masked признаки для сопоставления сторон, SfMMerge_1.method=from_landmarks, повторная триангуляция | Объединённая сцена → Meshing_3.output/outputMesh. **Нужно mrSegmentation/веса и подходящая съёмка; рецепт без выполнения**. Полностью непересекающиеся стороны не получают достоверной взаимной позиции только из этого шаблона |
+
+Точный native рецепт для двух сторон после установки дополнения, на Linux
+с закреплённым runtime; `$MR` и `$RUN` — пути из runbook, RUN новый:
+
+```bash
+"$MR/meshroom_batch" --pipeline photogrammetryObjectTwoSides \
+  --input 'CameraInit_1=/data/side-a' 'CameraInit_2=/data/side-b' \
+  --output "$RUN/published" --save "$RUN/project.mg" \
+  --overrideCacheDir "$RUN/cache" --compute no
+# Проверить состав обеих CameraInit, prompt/маски и nodeType в сохранённом графе.
+"$MR/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode Meshing_3
+```
+
+Имена выше сверены с pinned шаблоном. Не передавать обе папки без адресации:
+штатный batch по умолчанию подаёт общие inputs **во все** Init Nodes.
+`--output` также сохраняет штатные Output Nodes при инициализации шаблона;
+без него native batch может убрать CopyFiles. Каталог published не заменяет
+сохранение облака, raw mesh и полного комплекта из фактических outputs.
+Для Object и ObjectTurntable соответственно заменить pipeline и передать один
+`CameraInit_1=/data/images`, конечный узел взять из графа (в этих pins Meshing_1).
+Выполнение не разрешает пропустить ограничение ресурсов, PDS QA и сохранение
+результатов из runbook; эти рецепты не являются журналом выполненных запусков.
+Известная граница: общий `prepare_dense_images.py` адресует только
+PrepareDenseScene_1; у TwoSides плотная ветка использует PrepareDenseScene_3.
+Если проявится уже известная ошибка PDS без chunks/EXR, этот helper нельзя
+считать готовым обходом для TwoSides: требуется отдельный whole-scene native
+вызов для фактического узла и проверка EXR/alpha/metadata. Этот участок
+двухстороннего рецепта не квалифицирован запуском; чужие status не исправлять
+фиктивным SUCCESS.
+
+## Масштаб и ориентация
+
+По умолчанию SfM units произвольны. **Выполнено:** native scalar SfMTransform
+на историческом synthetic SfM; реальные 37 видеокадров не имеют физического
+масштаба. Это не проверка новой измеренной рулеткой базы.
+
+Для измеренной базы общий путь поддерживает **Legacy + cctag3** в
+FeatureExtraction и FeatureMatching: два разных ID 0..31, положительное
+distance, units=mm/cm/m и measurement_source реального замера. Adapter вычисляет
+отношение к native базе и задаёт scalar scale без смены углов, осей и начала;
+точные настройки — [runbook](runbook.md). Нужны распечатанные метки,
+однозначные наблюдения и настоящий замер. Standard отвергает CCTag:
+ID encoding нового DAG не квалифицирован.
+
+Ориентация — отдельный штатный [SfMTransform][transform]: `auto`,
+`auto_from_cameras`, `align_ground`, `from_single_camera` и другие методы;
+явный `manual` задаёт manualTranslation/manualRotation/manualScale.
+Флаги applyScale/applyRotation/applyTranslation позволяют ограничить изменение.
+У Standard adapter без явных настроек сохраняется принятый identity default.
+При задании `nodes.SfMTransform_1` его поля не перезаписываются default: для
+ориентации явно выбрать method и applyRotation=true, а остальные флаги — по задаче.
+Физический scale.mode=unknown от такого поворота не становится измеренным.
+**Рецепт без нового выполнения:** настроить node в сохранённом графе до плотной
+стадии; сохранить исходную сцену и описать преобразование. При изменении сцены
+зависимые плотные стадии требуют соответствующего пересчёта. Auto orientation
+не доказывает физическую вертикаль, а единый поворот не исправляет углы деталей.
+
+Полные известные XYZ меток — `method=from_markers` и список markerId/markerCoord;
+это иной контракт, чем два ID и расстояние. Общий `marker_coords` зарезервирован
+и отвергается; историческая настройка сохранена в
+[prepare_graphs_2026.py](../scripts/prepare_graphs_2026.py), результат — в
+[отчёте Goal #4](reports/2026-11-21/meshroom-2026.md).
+Synthetic 100 мм не переносить на реальные фото.
+
+## Облако и исходная сетка
+
+Meshing создаёт **два самостоятельных выхода** одной реконструкции:
+`output` — densePointCloud.usda с visibility/SfMData, `outputMesh` —
+`mesh.{outputMeshFileType}` (по умолчанию OBJ). Значение читать из узла, не
+подменять mesh файлом dense.ply. Для обычной съёмки сохраняются оба:
+дополнительный selector или Texturing для этого не нужны.
+[Pinned Meshing][meshing] описывает также bounding box, maxInputPoints/maxPoints
+и форматы obj/gltf/fbx/stl. Bounding box ограничивает область расчёта,
+не делает пропущенные поверхности измеренными.
+
+У файлов есть важная конвенция осей: native mesh export сохраняет
+`(x, -y, -z)`, тогда как PLY из SfMData сохраняет координаты сцены.
+Для совместного просмотра raw OBJ с облаком применяется единое преобразование
+`R=diag(1,-1,-1)` к вершинам mesh; исходный файл сохраняется без изменения.
+Это смена базиса, сохраняющая длины и углы, а не новый физический масштаб.
+[Pinned Mesh::save](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/aliceVision/mesh/Mesh.cpp)
+задаёт эту конвенцию. Для иного exporter/reader проверять фактические оси,
+а не назначать новую ориентацию на глаз.
+
+Плотное облако экспортируется штатным ConvertSfMFormat в PLY; raw OBJ читается
+обычным mesh reader (например Open3D/CloudCompare). Выдача общего запуска,
+точные пути, проверка и backup описаны в [runbook](runbook.md).
+**Выполнено в #6:** плотное PLY обоих графов; наличие/чтение сохранённого
+raw mesh и его координатная проверка учитываются отдельно в [Goal #8](goal-8.md).
+Статическая проверка outputMesh не заменяет фактическое открытие файла.
+
+## Фильтрация сетки
+
+Исходный `Meshing.outputMesh` сохранять отдельно. В штатном графе
+MeshFiltering.inputMesh связан с ним; `MeshFiltering.outputMesh` — новый файл.
+Есть три разные операции:
+
+| Операция | Штатная настройка и смысл |
+|---|---|
+| Оставить крупнейший связный фрагмент | keepLargestMeshOnly=true; может удалить нужную отдельную деталь |
+| Удалить треугольники | filteringIterations/filteringSubset, filterLargeTrianglesFactor (0 отключает фильтр крупных треугольников), filterTrianglesRatio (0 отключает ratio-фильтр) |
+| Сгладить вершины | smoothingIterations/smoothingSubset/smoothingLambda; smoothingIterations=0 отключает сглаживание. Значение по умолчанию **5**, поэтому default filtering уже меняет геометрию |
+
+Для очистки без сглаживания явно выставить smoothingIterations=0; выбранные
+параметры сохранить рядом с результатом. Сглаживание само по себе не улучшает
+измеренную точность. Для сокращения числа граней есть отдельный bundled
+[MeshDecimate][decimate]; для задач по маскам/видимости —
+[MeshMasking][meshmasking] и [MeshRemoveUnseenFaces][unseen]. Это вспомогательные
+операции, не обязательные этапы; их новые прогоны не выполнялись.
+Все настройки и формат выхода — [pinned MeshFiltering][filtering].
+
+**Рецепт продолжения:** в том же проекте настроить MeshFiltering, сохранить граф
+и выполнить compute до его имени; конкретные команды — ниже. Фильтрация и
+сглаживание нового видео пока не квалифицированы фактическим запуском.
+
+## Текстуры и экспорт
+
+Выбирать для просмотра/передачи внешнего вида, когда доступны исходные фото,
+intrinsics, плотная сцена и mesh. Штатный Texturing получает Meshing.output,
+папку экспортированных изображений и MeshFiltering.outputMesh; inputMesh можно
+явно связать с raw Meshing.outputMesh, если обработка не нужна. Это осмысленное
+изменение графа, которое фиксируется в проекте.
+
+Основные настройки: textureSide, downscale, unwrapMethod (Basic/LSCM/ABF),
+useUDIM, colorMapping.colorMappingFileType и outputMeshFileType.
+В этих pins defaults — textureSide=8192, downscale=2, useUDIM=true,
+colorMappingFileType=exr, outputMeshFileType=obj. Они отличаются от старых
+примеров с PNG. Параметры и outputs — [pinned Texturing][texturing].
+**Рецепт**, всё нужное для базового Texturing в комплекте, нового вычисления нет.
+
+Передавать каталог целиком: OBJ + MTL + **все** texture_*.exr/png/...,
+а также normal/height/displacement maps и другие файлы, на которые ссылается
+материал, если они создавались. Сохранить относительные имена; открыть копию
+из нового каталога и проверить материалы. Один OBJ не является комплектом
+текстурированной модели. CopyFiles в базовых шаблонах публикует
+Texturing.outputMesh/outputMaterial/outputTextures; для дополнительных карт
+проверить фактические ссылки материала и включить их в backup явно.
+Автоматический CopyFiles не является backup облака, raw mesh или кэша.
+В [обсуждении #211](https://github.com/alicevision/Meshroom/issues/211#issuecomment-416184229)
+разработчик fabiencastan объясняет связь unwrapMethod и нескольких атласов;
+принудительное ожидание одного texture-файла неверно. Совместимость конкретного
+читателя проверяется на всём комплекте, а не по одному успешному импорту OBJ.
+
+При необходимости другого формата сначала выбрать поддержанный outputMeshFileType
+в node; отдельный bundled [ConvertMesh][convertmesh] нужен только для конкретной
+несовместимости читателя. STL не хранит фотографические текстуры.
+[ConvertSfMFormat][convertsfm], ExportColoredPointCloud, ExportColmap,
+ExportAlembic/ExportUSD — вспомогательные native интерфейсы обмена сценой,
+а не замена проверки нужного выходного файла. Полные контракты —
+[каталог descriptors][nodes].
+
+## Продолжение штатного графа
+
+Перед compute прочитать nodeType/имена из сохранённого project.mg. В базовых
+Standard/Legacy шаблонах pins имена — Meshing_1, MeshFiltering_1, Texturing_1;
+у двух сторон — суффикс _3. Для общего пути проект/кэш и подготовка Legacy
+берутся из runbook; **не создавать новый batch-проект ради продолжения**.
+
+```bash
+# После подготовки/проверки общего пути, с тем же project.mg и cache:
+"$MR/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode Meshing_1
+"$MR/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode MeshFiltering_1
+"$MR/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode Texturing_1
+```
+
+Это последовательные альтернативные глубины, а не требование запускать все три.
+`--toNode` включает зависимости; `--node` требует уже готовые зависимости.
+Не задавать forceCompute/forceStatus по умолчанию. Неизменные успешные стадии
+переиспользуются при сохранных cache/status и совпадающих UID входов/настроек;
+новые параметры меняют затронутые стадии. Проверять статус и фактические output
+файлы до и после; SUCCESS без файла означает неполный кэш. Перенос одного
+project.mg без кэша не переносит готовые вычисления.
+**Локально выполнено в #8:** native Meshroom core planner `dfsToProcess`
+на частных копиях сохранённых графов, с восстановленными штатными downstream
+узлами и неизменными upstream UID. Для Standard план до Meshing пуст, до
+MeshFiltering содержит только MeshFiltering, до Texturing — filtering+texturing.
+Для Legacy продолжение также включает PrepareDenseScene с неготовым статусом;
+готовые SfM/DepthMap/Meshing в план пересчёта не входят. На Windows отсутствуют
+Linux AV bindings: это проверка планирования с serialized CompatibilityNodes,
+**не исполнение** AV, фильтрации или текстурирования. Подробные evidence —
+в [Goal #8](goal-8.md). Штатный владелец планирования — [Meshroom graph.py][graph].
 
 ## Новый граф и обход PrepareDenseScene
 
@@ -110,3 +364,90 @@ photogrammetry-шаблонов не объявляют именованных G
 опирается на RAM++, GroundingDINO и SAM; это дополнительная установка, которую
 данный справочник не квалифицирует. До наблюдаемой проблемы фона используем
 базовую обработку и при необходимости готовые маски.
+
+## Остальные шаблоны комплекта
+
+Всего в закреплённом архиве **27**, а не 27 дополнительных шаблонов.
+Пять основных photogrammetry-шаблонов разобраны выше; оставшиеся 22 перечислены
+полностью ниже. Ссылки ведут к точному штатному графу — исполняемому рецепту
+авторов с входами/связями; nodeType и параметры раскрываются в
+[descriptors][nodes]. Это **инвентарь без новых запусков**, а не набор
+дополнительно поддерживаемых режимов обвязки. При отсутствии dedicated manual
+не подменяем его догадкой о назначении узлов.
+
+| Штатный шаблон / рецепт | Назначение | Связь с нашим доменом / предварительные требования |
+|---|---|---|
+| [photogrammetryDraft.mgt][draft] | Быстрый черновик по разреженной геометрии | Вспомогательный preview; нет DepthMap/DepthMapFilter, не эквивалент плотного MVS |
+| [photogrammetryAndCameraTracking.mgt][photo-track] | Фотограмметрия плюс трекинг видеокамер | Смежная доставка камер/VFX; использует ImageSegmentationSam3, нужен соответствующий plugin/веса |
+| [photogrammetryAndCameraTrackingLegacy.mgt][photo-track-legacy] | То же на Legacy SfM | Смежная доставка камер; ImageDetectionPrompt/ImageSegmentationBox требуют mrSegmentation |
+| [cameraTracking.mgt][track] | Камеры видео с калибровкой | Камеры/VFX, не обязательный путь плотной модели; нужны калибровочные данные и Sam3 |
+| [cameraTrackingWithoutCalibration.mgt][track-nocal] | Камеры видео без отдельной калибровки | Смежный режим камер с реконструкцией; Sam3 отсутствует в архиве |
+| [cameraTrackingLegacy.mgt][track-legacy] | Камеры видео через Legacy SfM | Смежный режим; калибровка и mrSegmentation по графу |
+| [cameraTrackingWithoutCalibrationLegacy.mgt][track-nocal-legacy] | Legacy камеры без отдельной калибровки | Смежный режим; mrSegmentation по графу |
+| [cameraTrackingDepth.mgt][track-depth] | Трекинг с оценкой глубины | Вспомогательное monocular depth/track injection; MoGe и Sam3 требуют дополнений/весов |
+| [cameraTrackingRoma.mgt][track-roma] | Камеры с нейросетевыми соответствиями | Смежный путь сопоставления; Roma* и Sam3 отсутствуют, нужна отдельная установка |
+| [cameraTrackingLidarExperimental.mgt][track-lidar] | Связать камеры и LiDAR | Отдельный LiDAR/VFX-домен; survey/pose inputs, Sam3/VideoSam3; не осваивается в #8 |
+| [cameraTrackingLidarWithMeshResection.mgt][track-resection] | Камеры относительно готовой сетки | Смежный mesh resection, не извлечение mesh из фото; нужен готовый mesh и Sam3 |
+| [nodalCameraTracking.mgt][nodal] | Трекинг вращения камеры без перемещения | Камеры/VFX; не обещает глубину; калибровка и Sam3 по графу |
+| [nodalCameraTrackingWithoutCalibration.mgt][nodal-nocal] | То же без отдельной калибровки | Смежный nodal режим; Sam3; не заменяет обход объекта |
+| [distortionCalibration.mgt][distortion] | Калибровка дисторсии по шахматной доске | Полезная подготовка intrinsics; нужны кадры доски, не обязательна для обычного входа |
+| [colorCalibration.mgt][color] | Коррекция цвета по цветовой мишени | Полезная подготовка цвета; нужен ColorChecker, не источник метрического масштаба |
+| [rawImageConversion.mgt][raw] | Конвертация и обработка исходных изображений | Вспомогательный ввод RAW через ImageProcessing; проверять поддержку камеры и вывод |
+| [hdrFusion.mgt][hdr] | Слияние экспозиционной серии в HDR | Вспомогательный imaging-домен; нужны согласованные экспозиционные серии |
+| [panoramaHdr.mgt][panorama] | Панорама из экспозиционных серий | Отдельный panorama-домен, не плотная 3D-реконструкция |
+| [panoramaFisheyeHdr.mgt][fisheye] | HDR панорама из fisheye | Отдельный panorama-домен с fisheye-входами |
+| [photometricStereo.mgt][ps] | Нормали из разного освещения | Отдельная постановка съёмки: фиксированная камера, световая калибровка/сфера; не обычное видео |
+| [multiViewPhotometricStereo.mgt][mvps] | Фотометрическое стерео с нескольких ракурсов | Смежная геометрия с отдельными требованиями к освещению и сферам; не запасной обычный MVS |
+| [lidarMeshing.mgt][lidar] | Сетка из лазерных сканов E57 | Отдельный LiDAR-домен; E57 и scan metadata, не фотографии; не осваивается в #8 |
+
+Для всех строк сначала проверить доступность node descriptors и конкретных
+данных; таблица не утверждает установленность внешних ML-моделей.
+Базовые camera/AV nodes присутствуют, дополнительные Sam3/MoGe/RoMa nodes — нет.
+Менеджер плагинов входит в Meshroom, однако установка и совместимость нужного
+плагина с закреплёнными pins требуют отдельной проверки перед расчётом.
+
+[standard]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/photogrammetry.mgt
+[legacy]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/photogrammetryLegacy.mgt
+[object]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/photogrammetryObject.mgt
+[turntable]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/photogrammetryObjectTurntable.mgt
+[twosides]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/photogrammetryObjectTwoSides.mgt
+[batch]: https://github.com/alicevision/Meshroom/blob/b12ea8896e7e95cc9911b4ec39c272914e4da726/bin/meshroom_batch
+[compute]: https://github.com/alicevision/Meshroom/blob/b12ea8896e7e95cc9911b4ec39c272914e4da726/bin/meshroom_compute
+[graph]: https://github.com/alicevision/Meshroom/blob/b12ea8896e7e95cc9911b4ec39c272914e4da726/meshroom/core/graph.py
+[nodes]: https://github.com/alicevision/AliceVision/tree/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision
+[keyframes]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/KeyframeSelection.py
+[masking]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/ImageMasking.py
+[maskprocessing]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/MaskProcessing.py
+[maskeroding]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/MaskEroding.py
+[segmentation]: https://github.com/meshroomHub/mrSegmentation/blob/66866d139cf43a7736da0a3ead5b2c1405550576/README.md
+[transform]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/SfMTransform.py
+[meshing]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/Meshing.py
+[filtering]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/MeshFiltering.py
+[decimate]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/MeshDecimate.py
+[meshmasking]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/MeshMasking.py
+[unseen]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/MeshRemoveUnseenFaces.py
+[texturing]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/Texturing.py
+[convertmesh]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/ConvertMesh.py
+[convertsfm]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/aliceVision/ConvertSfMFormat.py
+[draft]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/photogrammetryDraft.mgt
+[photo-track]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/photogrammetryAndCameraTracking.mgt
+[photo-track-legacy]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/photogrammetryAndCameraTrackingLegacy.mgt
+[track]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/cameraTracking.mgt
+[track-nocal]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/cameraTrackingWithoutCalibration.mgt
+[track-legacy]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/cameraTrackingLegacy.mgt
+[track-nocal-legacy]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/cameraTrackingWithoutCalibrationLegacy.mgt
+[track-depth]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/cameraTrackingDepth.mgt
+[track-roma]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/cameraTrackingRoma.mgt
+[track-lidar]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/cameraTrackingLidarExperimental.mgt
+[track-resection]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/cameraTrackingLidarWithMeshResection.mgt
+[nodal]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/nodalCameraTracking.mgt
+[nodal-nocal]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/nodalCameraTrackingWithoutCalibration.mgt
+[distortion]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/distortionCalibration.mgt
+[color]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/colorCalibration.mgt
+[raw]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/rawImageConversion.mgt
+[hdr]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/hdrFusion.mgt
+[panorama]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/panoramaHdr.mgt
+[fisheye]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/panoramaFisheyeHdr.mgt
+[ps]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/photometricStereo.mgt
+[mvps]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/multiViewPhotometricStereo.mgt
+[lidar]: https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/meshroom/lidarMeshing.mgt

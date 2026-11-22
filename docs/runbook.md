@@ -1,12 +1,20 @@
-# Фото/видео → плотная геометрия
+# Фото/видео → облако, mesh и связанные результаты
 
-Текущий [Goal #6](goal-6.md) использует обычный JSON съёмки, native Meshroom
-project/cache и штатный CLI. Реальное видео дало **37 кадров**; оба графа прошли
-до dense PLY и JSON. Для базовой съёмки выбран Standard без PDS adapter;
+Текущий [Goal #8](goal-8.md) сохраняет обычный JSON съёмки, полный native Meshroom
+project/cache и штатный CLI. Принятое видео Goal #6 дало **37 кадров**; оба графа
+прошли Meshing, создав dense cloud и отдельный raw OBJ. В Goal #8 эти сохранённые
+выходы фактически прочитаны локально, без повторного расчёта. Для базовой съёмки выбран Standard без PDS adapter;
 результаты и ограничения — в [отчёте](reports/2026-11-21/photo-video-3d.md).
 Команда в инструкции не означает приёмку результата. Актуальный статус — в Goal,
 дополнительные режимы и зависимости — в [матрице](meshroom-modes.md).
 Выделение деталей и построение CAD остаются следующим отдельным этапом.
+
+Быстрый выбор: обычное фото/видео → Standard → Meshing (облако **и** raw mesh);
+метки CCTag3 → Legacy. Фильтрация и текстуры — отдельное продолжение того же
+полного графа. Для масок, стола и переворота сначала открыть соответствующую
+строку [карты сценариев](meshroom-modes.md), затем нужный рецепт.
+Для готового backup можно сразу перейти к [локальному отчёту](#локальный-отчёт).
+Базовый бюджет Goal #8 — $0: новая аренда для чтения сохранённых файлов не нужна.
 
 Завершённый Goal #4 сохраняет
 [полный принятый рецепт 2026](https://github.com/Kwentin3/photogrammetry-to-cad/blob/b907fb4c95f3d0c9a5a3150b45e15f2057389509/docs/runbook.md),
@@ -244,6 +252,8 @@ setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/prepare-standard" 300 -
 
 Prepare проверяет manifest, применяет настройки **до native CameraInit**,
 загружает установленный template и сохраняет project.mg/cache/effective-settings.json.
+Сохраняется весь шаблон, включая MeshFiltering, Texturing и CopyFiles;
+это не запускает их. `result_nodes` содержит реальные имена конечных узлов.
 Existing RUN не перезаписывается. От prepare до завершения входные настройки,
 manifest, изображения и выбранные маски сохраняются неизменными. Команда `verify`
 без загрузки runtime сверяет их с сохранёнными SHA и receipt масок; перед каждым
@@ -315,12 +325,66 @@ input/imagesFolder, зарегистрированные view IDs, размер�
 и metadata. Для ExportImages нужны EXR/viewid/обычный image window; его exposure
 metadata отличаются от PDS projection fields. Если compute заново записал EXR,
 повторить QA новых байтов. Export берёт точные native outputs графа и создаёт
-scene.json/dense.ply; при известном масштабе — SHA-bound scale-evidence.json.
+scene.json/dense.ply и байтовую копию отдельного Meshing.outputMesh (обычно
+mesh.obj); при известном масштабе — SHA-bound scale-evidence.json.
+`artifacts.mesh/native_mesh` и `mesh_export` записывают точные пути/хэш/размер.
+OBJ, FBX и STL — отдельные native файлы. Для glTF exporter сохраняет весь
+Meshing UID-каталог в `meshing-output`, чтобы не потерять соседний buffer;
+это упаковка файлов, не новый расчёт или проверка glTF конкретным просмотрщиком.
 Не выбирать первый попавшийся UID/glob.
 
 Повторить стадии Legacy с его SETTINGS/RUN и другими JOB_DIR. Сохранить отдельные
 outputs, время и ручные действия; сравнить восстановленные части, пропуски и
 искажения. Количество точек и smooth mesh не доказывают физическую точность.
+
+## Продолжить до фильтрации или текстур
+
+После Meshing можно остановиться: облако и raw mesh уже созданы. В полном графе
+новой подготовки доступны `result_nodes.meshing/filtering/texturing`.
+Выбрать только нужный конец; этот пример — рецепт для среды с разрешённым
+вычислением, в Goal #8 он не запускает новую GPU:
+
+```bash
+TARGET_KIND=filtering # либо texturing
+TARGET=$("$MESHROOM_PYTHON" - "$RUN/effective-settings.json" "$TARGET_KIND" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))['result_nodes'][sys.argv[2]])
+PY
+)
+"$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" verify "$RUN"
+setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/$TARGET_KIND-standard" 900 -- \
+  taskset -c "$CPUS" "$MESHROOM_ROOT/meshroom_compute" "$PROJECT" --cache "$CACHE" --toNode "$TARGET" \
+  >"$WORK/jobs/$TARGET_KIND-standard-launch.log" 2>&1 </dev/null
+```
+
+Сначала задать нужные настройки **при подготовке**. MeshFiltering по умолчанию
+включает сглаживание: для одной очистки отключить его явно; raw mesh сохранять
+отдельно. Менять JSON завершённого RUN нельзя: это требует новой подготовки с
+новыми settings/RUN; native UID может повторно использовать неизменённые upstream
+этапы только при явно сохранённом том же кэше. Здесь изменение настройки не
+подменяет продолжение исходного неизменённого проекта.
+
+Для новой конфигурации после подтверждённого завершения прежнего JOB можно
+передать прежний native cache явно: `reconstruction.py prepare "$NEW_SETTINGS"
+"$NEW_RUN" "$MESHROOM_ROOT" --cache "$CACHE"` (одна строка shell-команды).
+Без `--cache` новый RUN получает свой cache. Не запускать конфликтующие вычисления
+в общем кэше одновременно. При backup учитывать фактический `effective.cache`,
+который с этой опцией может находиться вне нового RUN.
+
+Без forceCompute native planner пропускает SUCCESS chunks. Нужны сохранные
+файлы, их UID/статусы и неизменные входы. Новый JOB_DIR для новой цели; `--resume`
+только для прежних argv/cwd. Старые урезанные проекты #6 сами не обретают удалённые
+узлы: они остаются историческими, полнота графа относится к новой подготовке.
+Локальный native planner #8 сохранил старые UID после восстановления downstream
+в приватных копиях; Standard планировал только filter/texture, Legacy ещё PDS.
+Filtering/Texturing на Linux в этом Goal не вычислялись. Подробнее —
+[native рецепты и ограничения](meshroom-modes.md#продолжение-штатного-графа).
+
+Texturing выдаёт комплект: OBJ + MTL + все карты/UDIM tiles (либо связанные файлы
+выбранного формата), а не один mesh. После успеха сохранить весь native output
+каталог, сверить ссылки и открыть комплект. CopyFiles сохранён в графе, но
+не выполняется при `--toNode Texturing`: публикация им — отдельная native цель
+с явно настроенным каталогом. Текстурированная выдача здесь остаётся рецептом.
 
 ## Наблюдение и продолжение
 
@@ -367,7 +431,7 @@ receipt не продолжается и требует новой подгот�
 ## Backup, освобождение аренды и локальный отчёт
 
 До удаления сохранить capture/manifest/config, projects/effective-settings,
-scale plan/evidence, scene/PLY, QA, logs/status и нужный native cache. USDA требует
+scale plan/evidence, scene/PLY/raw mesh, QA, logs/status и нужный native cache. USDA требует
 **всего UID-каталога с соседними USDC payloads**, не только текстового файла.
 Выбранные относительные пути записать в paths-to-keep.txt, исключив ключи/environ:
 
@@ -457,6 +521,8 @@ if ((Get-FileHash -LiteralPath $joined -Algorithm SHA256).Hash.ToLowerInvariant(
 все страницы ledger. Stop оставляет платный диск. Destroy удаляет инстанс/данные;
 его exit code сам по себе недостаточен. Account balance не заменяет invoices.
 
+## Локальный отчёт
+
 Локальный отчёт — после backup/освобождения GPU, в существующей Windows среде
 Open3D/NumPy. Cloud effective-settings.json оставить неизменным. Явные параметры
 `--manifest` и при известном масштабе `--scale-evidence` указывают на точные
@@ -472,6 +538,7 @@ $originalSettings="$runLocal/effective-settings.json"
 $settings=Get-Content $originalSettings -Raw -Encoding UTF8 | ConvertFrom-Json
 $manifestLocal=[IO.Path]::GetFullPath("$unpacked/capture/manifest.json")
 $reportArgs=@('--scene',"$runLocal/scene.json",'--cloud',"$runLocal/dense.ply",'--settings',$originalSettings,'--manifest',$manifestLocal,'--output',"$runLocal/reconstruction-report.json")
+$reportArgs+=@('--mesh',"$runLocal/mesh.obj")
 if ($settings.scale.mode -in @('measured_baseline','marker_coords')) {
   $reportArgs+=@('--scale-evidence',"$runLocal/scale-evidence.json")
 }
@@ -487,6 +554,59 @@ if ($LASTEXITCODE -ne 0) { throw 'Reconstruction report failed' }
 и края восстановлены, где есть разрывы, фон или лишняя геометрия. Это визуальная
 проверка покрытия, без произвольного порога числа точек или доли камер.
 Она не измеряет скрытые стороны, физическую точность и пригодность к изготовлению.
+
+`--mesh` необязателен: прежний cloud-only отчёт сохранён. При его добавлении
+Open3D фактически читает отдельную сетку, проверяет непустые vertices/triangles,
+конечность координат/индексы, пишет bbox, SHA и units. Точки без граней mesh не
+заменяют. Если есть native `mesh_export` receipt, его SHA проверяется; исходные
+файлы не меняются. У raw OBJ Meshing оси отличаются от dense PLY: pinned
+Mesh::save пишет `(x,-y,-z)`, тогда как SfMData PLY пишет XYZ. Report явно хранит
+фиксированный `mesh_to_cloud=diag(1,-1,-1)` и bbox в общей системе, но **не**
+поворачивает исходный OBJ. Это не fitted alignment и не изменение масштаба.
+Open3D может объединять совпадающие OBJ vertices: его счётчик не всегда равен
+числу строк `v`. Для других mesh-форматов конвенция reader здесь не квалифицирована.
+
+У backup #6 mesh находился в исходном `cache/Meshing/<native UID>/mesh.obj`,
+а не рядом с dense.ply. Его точный каталог берётся из `artifacts.native_dense`
+сохранённого settings (это тот же Meshing UID) и native `outputMesh`/тип из nodes.
+После rebasing корня backup можно передать этот точный файл в `--mesh` либо
+скопировать без преобразования в локальный RUN. Не выбирать произвольный mesh
+по glob. [Фактическая выдача #8](reports/2026-11-22/meshroom-harness.md) описывает
+оба принятых файла и формат; частный путь к backup владелец передаёт отдельно.
+
+### Открыть облако и raw OBJ
+
+В интерактивной сессии использовать существующий CloudCompare (отдельно применив
+описанный поворот OBJ) или штатный Open3D API ниже. Подставить фактические пути;
+закрыть окно после осмотра. Этот GUI-рецепт не выполняется в headless приёмке #8:
+там сохранены JSON и [просмотр одних и тех же файлов](reports/2026-11-22/meshroom-harness.md).
+Агент передаёт запуск своему ограничителю с явным сроком и наблюдает свой процесс.
+
+```powershell
+@'
+import os, sys
+from pathlib import Path
+import numpy as np
+import open3d as o3d
+cloud_path, mesh_path = (Path(x).resolve(strict=True) for x in sys.argv[1:3])
+cloud = o3d.io.read_point_cloud(str(cloud_path))
+previous = Path.cwd()
+try:
+    os.chdir(mesh_path.parent)
+    mesh = o3d.io.read_triangle_mesh(mesh_path.name, enable_post_processing=False)
+finally:
+    os.chdir(previous)
+mesh.rotate(np.diag([1., -1., -1.]), center=(0., 0., 0.))
+mesh.compute_vertex_normals()
+o3d.visualization.draw_geometries([cloud, mesh])
+'@ | & $python - "$runLocal/dense.ply" "$runLocal/mesh.obj"
+```
+
+Это overlay по native осевому контракту raw OBJ, не ICP/fit и не запись новых
+байтов на диск. Для оценки пропусков смотреть несколько направлений и исходные
+кадры; объединение cloud+mesh в одном окне само не подтверждает покрытие.
+Для такого сравнения сохранить исходный capture вместе с manifest: небольшой
+пакет scene/PLY/OBJ достаточен для чтения результата, но не заменяет кадры.
 
 ## Маски, масштаб и дополнительные режимы
 
