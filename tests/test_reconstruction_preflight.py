@@ -103,6 +103,14 @@ class ReconstructionPreflightTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'native boundary'):
                 reconstruction.prepare(self.args('supported-cctag3'))
 
+    def test_explicit_cache_inside_checkout_is_rejected_without_creating_run(self):
+        args = self.args('bad-cache')
+        args.cache = reconstruction.REPO / 'cache'
+        with mock.patch.object(reconstruction, 'init_runtime', side_effect=AssertionError('No native work needed')):
+            with self.assertRaisesRegex(ValueError, 'outside the checkout'):
+                reconstruction.prepare(args)
+        self.assertFalse(args.run.exists())
+
     def test_preflight_accepts_actual_matching_file(self):
         folder = self.root / 'masks'
         folder.mkdir()
@@ -123,6 +131,19 @@ class ReconstructionPreflightTests(unittest.TestCase):
         self.assertEqual(dense.attribute('maskExtension').value, 'png')
         self.assertEqual(feature.attribute('masksFolder').value, str(folder))
         self.assertIs(feature.attribute('maskInvert').value, False)
+
+    def test_explicit_standard_transform_settings_are_not_silently_reset(self):
+        transform = AttributeNode('SfMTransform', method='', transformation='', scale=0.,
+                                  applyScale=False, applyRotation=True, applyTranslation=True)
+        graph = SimpleNamespace(nodes=[transform])
+        reconstruction.configure_standard_transform(graph, {})
+        self.assertEqual(transform.attribute('method').value, 'transformation')
+        self.assertIs(transform.attribute('applyRotation').value, False)
+        reconstruction.configure_standard_transform(graph, {
+            transform.name: {'method': 'auto_from_cameras', 'applyRotation': True}})
+        self.assertEqual(transform.attribute('method').value, 'auto_from_cameras')
+        self.assertIs(transform.attribute('applyRotation').value, True)
+        self.assertEqual(transform.attribute('scale').value, 1.)
 
     def test_standard_dense_only_masks_use_native_export_attributes(self):
         feature = AttributeNode('FeatureExtraction')

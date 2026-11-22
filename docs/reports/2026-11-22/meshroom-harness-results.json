@@ -1,0 +1,338 @@
+{
+  "source": "Goal6 preserved native reconstruction; no new photogrammetry compute",
+  "runtime": {
+    "meshroom_revision": "b12ea8896e7e95cc9911b4ec39c272914e4da726",
+    "alicevision_revision": "d012d05589b528dcf57a2a0c805c0a5709df8613",
+    "archive_name": "Meshroom-2026.11.21-b12ea88-linux-full.tar.gz",
+    "archive_bytes": 600156630,
+    "archive_sha256": "4ca3cfb0898b8000def4e68d513468a199b948329b63cdb6b257e427d295163b",
+    "bundle_directory": "Meshroom-2026.11.21-b12ea88-linux",
+    "retained_copy_relative_to_checkout": "../photogrammetry-to-cad-work/runtime-archives/Meshroom-2026.11.21-b12ea88-linux-full.tar.gz",
+    "upstream_url": "https://github.com/alicevision/Meshroom/releases/download/nightly/Meshroom-2026.11.21-b12ea88-linux-full.tar.gz",
+    "upstream_url_retention": "Rolling asset can be deleted; use the retained owner copy and verify SHA256",
+    "cuda_toolkit": "12.8.0",
+    "minimum_host_driver": "570.26",
+    "minimum_cuda_max_good": 12.8,
+    "image": "nvidia/cuda@sha256:ccc7187c865488c45eb2555d2d3634235aeda5b7a1de4a6dc29d031c7abd997e",
+    "image_tag_reference": "nvidia/cuda:12.8.0-runtime-ubuntu24.04",
+    "image_platform": "linux/amd64"
+  },
+  "reader": {
+    "Open3D": "0.20.0",
+    "Python": "3.11.9"
+  },
+  "physical_scale": "unknown",
+  "new_infrastructure_cost_usd": 0,
+  "cases": {
+    "standard": {
+      "node_name": "Meshing_1",
+      "node_uid": "713b641cb14e83da94fd30e568e4db5cb31daae9",
+      "input_manifest_sha256": "6c84267d24a42b29a2b2f24498cb126225b57a6ce34428dc7a188498d7ccd690",
+      "files": {
+        "run/standard/project.mg": {
+          "bytes": 135372,
+          "sha256": "a877668f3526816f52766d9f6210cadea9351d5f26fe04102d5954b58f6187ac",
+          "backup_index_match": true
+        },
+        "run/standard/effective-settings.json": {
+          "bytes": 46255,
+          "sha256": "e29edfc8d681263b60dac2ab8de44865b4f7ddf71213398edae4e43e7a5d27c2",
+          "backup_index_match": true
+        },
+        "run/standard/cache/Meshing/713b641cb14e83da94fd30e568e4db5cb31daae9/mesh.obj": {
+          "bytes": 10576609,
+          "sha256": "cd5df695053b5b5f4092f6f855809174b9cba734de0cc0adea72adc1c0d20597",
+          "backup_index_match": true
+        },
+        "run/standard/dense.ply": {
+          "bytes": 5081152,
+          "sha256": "5f517556d87ccbc70459fe97a770fb199b6dec601deff5be601bd7b25538de2b",
+          "backup_index_match": true
+        }
+      },
+      "source_obj_vertices": {
+        "count": 121293,
+        "finite": true,
+        "min": [
+          -0.89853394,
+          -0.801606357,
+          -1.79517961
+        ],
+        "max": [
+          0.86089462,
+          1.15712011,
+          -1.22507954
+        ],
+        "extent": [
+          1.75942856,
+          1.958726467,
+          0.5701000699999998
+        ]
+      },
+      "source_obj_faces": {
+        "count": 241137,
+        "index_min": 0,
+        "index_max": 121292,
+        "all_indices_valid": true,
+        "referenced_vertex_indices": 121293,
+        "unreferenced_vertex_count": 0
+      },
+      "source_obj_unique_coordinate_counts": {
+        "parsed_float64": 118788,
+        "float32": 118788
+      },
+      "mesh_vertices": {
+        "count": 118788,
+        "finite": true,
+        "min": [
+          -0.8985339403152466,
+          -0.8016063570976257,
+          -1.7951796054840088
+        ],
+        "max": [
+          0.8608946204185486,
+          1.1571201086044312,
+          -1.2250795364379883
+        ],
+        "extent": [
+          1.7594285607337952,
+          1.9587264657020569,
+          0.5701000690460205
+        ]
+      },
+      "mesh_triangles": {
+        "count": 241137,
+        "index_min": 0,
+        "index_max": 118787,
+        "all_indices_valid": true
+      },
+      "dense_points": {
+        "count": 121291,
+        "finite": true,
+        "min": [
+          -0.898534,
+          -1.15712,
+          1.22508
+        ],
+        "max": [
+          0.860895,
+          0.801606,
+          1.79518
+        ],
+        "extent": [
+          1.759429,
+          1.958726,
+          0.5701
+        ]
+      },
+      "coordinate_check": {
+        "meaning": "Native Mesh::save exports (x,-y,-z); apply the same self-inverse rotation in memory to compare with dense cloud. No scale, translation, alignment fit, or source mutation.",
+        "source_obj_transformed_bbox_abs_delta": [
+          [
+            6.000000007944095e-08,
+            1.0999999999761201e-07,
+            4.599999998688986e-07
+          ],
+          [
+            3.799999999110071e-07,
+            3.5700000000638e-07,
+            3.90000000072277e-07
+          ]
+        ],
+        "dense_to_transformed_source_vertex_distance_quantiles_0_50_95_100": [
+          7.280109896886155e-09,
+          2.560494727633763e-06,
+          4.780033897809393e-06,
+          6.936998198145048e-06
+        ],
+        "transformed_source_vertex_to_dense_distance_quantiles_0_50_95_100": [
+          7.280109896886155e-09,
+          2.5605291952880014e-06,
+          4.7800513771672444e-06,
+          0.20400049451568392
+        ],
+        "provenance": "pinned native export source; fixed rotation, no fitted alignment",
+        "mesh_to_cloud_rotation": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            0
+          ],
+          [
+            0,
+            0,
+            -1
+          ]
+        ]
+      },
+      "unchanged_after_probe": {
+        "run/standard/project.mg": true,
+        "run/standard/effective-settings.json": true,
+        "run/standard/cache/Meshing/713b641cb14e83da94fd30e568e4db5cb31daae9/mesh.obj": true,
+        "run/standard/dense.ply": true
+      },
+      "native_mesh_relative_path": "run/standard/cache/Meshing/713b641cb14e83da94fd30e568e4db5cb31daae9/mesh.obj",
+      "native_cloud_relative_path": "run/standard/dense.ply"
+    },
+    "legacy": {
+      "node_name": "Meshing_1",
+      "node_uid": "3c5f1f3bd5af2963a8bfd197bca23bc503d53a19",
+      "input_manifest_sha256": "6c84267d24a42b29a2b2f24498cb126225b57a6ce34428dc7a188498d7ccd690",
+      "files": {
+        "run/legacy/project.mg": {
+          "bytes": 110292,
+          "sha256": "1771e1a80ddb42dbb0a42ecad3a1b95f8004c40456c0af35b5b7d34d4d18bd4d",
+          "backup_index_match": true
+        },
+        "run/legacy/effective-settings.json": {
+          "bytes": 40195,
+          "sha256": "3bd207d6f2d0cd59f4fbbcaa91e8d0191a05ad80c354aacbec000d5e21ae3825",
+          "backup_index_match": true
+        },
+        "run/legacy/cache/Meshing/3c5f1f3bd5af2963a8bfd197bca23bc503d53a19/mesh.obj": {
+          "bytes": 10371490,
+          "sha256": "74e538510e566a75e47c2b29b48b313e230bc3768237999df1954cdcdd7c0cfe",
+          "backup_index_match": true
+        },
+        "run/legacy/dense.ply": {
+          "bytes": 4949392,
+          "sha256": "b6935de90eb36ddf2af55877f59954152b5f40e0077cb2c8065c7e3fa2a97d3a",
+          "backup_index_match": true
+        }
+      },
+      "source_obj_vertices": {
+        "count": 121513,
+        "finite": true,
+        "min": [
+          -1.40307295,
+          -0.0297036897,
+          -2.46961832
+        ],
+        "max": [
+          2.02624846,
+          4.08148289,
+          -1.86254334
+        ],
+        "extent": [
+          3.42932141,
+          4.1111865797,
+          0.6070749799999999
+        ]
+      },
+      "source_obj_faces": {
+        "count": 241387,
+        "index_min": 0,
+        "index_max": 121512,
+        "all_indices_valid": true,
+        "referenced_vertex_indices": 121513,
+        "unreferenced_vertex_count": 0
+      },
+      "source_obj_unique_coordinate_counts": {
+        "parsed_float64": 119022,
+        "float32": 119022
+      },
+      "mesh_vertices": {
+        "count": 119022,
+        "finite": true,
+        "min": [
+          -1.4030729532241821,
+          -0.029703689739108086,
+          -2.469618320465088
+        ],
+        "max": [
+          2.0262484550476074,
+          4.081482887268066,
+          -1.8625433444976807
+        ],
+        "extent": [
+          3.4293214082717896,
+          4.1111865770071745,
+          0.6070749759674072
+        ]
+      },
+      "mesh_triangles": {
+        "count": 241387,
+        "index_min": 0,
+        "index_max": 119021,
+        "all_indices_valid": true
+      },
+      "dense_points": {
+        "count": 121513,
+        "finite": true,
+        "min": [
+          -1.40307,
+          -4.08148,
+          1.86254
+        ],
+        "max": [
+          2.02625,
+          0.0297037,
+          2.46962
+        ],
+        "extent": [
+          3.42932,
+          4.1111837,
+          0.6070799999999998
+        ]
+      },
+      "coordinate_check": {
+        "meaning": "Native Mesh::save exports (x,-y,-z); apply the same self-inverse rotation in memory to compare with dense cloud. No scale, translation, alignment fit, or source mutation.",
+        "source_obj_transformed_bbox_abs_delta": [
+          [
+            2.9500000000570736e-06,
+            2.8900000001996773e-06,
+            3.339999999907306e-06
+          ],
+          [
+            1.5399999999665681e-06,
+            1.0299999998741871e-08,
+            1.6800000000039006e-06
+          ]
+        ],
+        "dense_to_transformed_source_vertex_distance_quantiles_0_50_95_100": [
+          3.6810867927117496e-08,
+          3.9243670825624314e-06,
+          6.181136869476842e-06,
+          8.49346219164079e-06
+        ],
+        "transformed_source_vertex_to_dense_distance_quantiles_0_50_95_100": [
+          3.6810867927117496e-08,
+          3.9243670825624314e-06,
+          6.181136869476842e-06,
+          8.49346219164079e-06
+        ],
+        "provenance": "pinned native export source; fixed rotation, no fitted alignment",
+        "mesh_to_cloud_rotation": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            0
+          ],
+          [
+            0,
+            0,
+            -1
+          ]
+        ]
+      },
+      "unchanged_after_probe": {
+        "run/legacy/project.mg": true,
+        "run/legacy/effective-settings.json": true,
+        "run/legacy/cache/Meshing/3c5f1f3bd5af2963a8bfd197bca23bc503d53a19/mesh.obj": true,
+        "run/legacy/dense.ply": true
+      },
+      "native_mesh_relative_path": "run/legacy/cache/Meshing/3c5f1f3bd5af2963a8bfd197bca23bc503d53a19/mesh.obj",
+      "native_cloud_relative_path": "run/legacy/dense.ply"
+    }
+  }
+}

@@ -10,6 +10,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 from fetch_dataset import check_input_entries
@@ -110,6 +111,47 @@ def node(graph, kind):
     if len(found) != 1:
         raise ValueError(f'Expected one native {kind}, got {len(found)}')
     return found[0]
+
+
+def result_nodes(graph):
+    """Expose native endpoints; --toNode owns how much of the graph is run."""
+    kinds = {'meshing': 'Meshing', 'filtering': 'MeshFiltering', 'texturing': 'Texturing'}
+    return {key: node(graph, kind).name for key, kind in kinds.items()}
+
+
+def configure_standard_transform(graph, overrides):
+    transform = node(graph, 'SfMTransform')
+    # Preserve the accepted identity default, while honoring explicit native settings.
+    values = {'method': 'transformation', 'transformation': '', 'scale': 1.,
+              'applyScale': True, 'applyRotation': False, 'applyTranslation': False}
+    values.update(overrides.get(transform.name, {}))
+    settings(transform, values)
+
+
+def save_native_mesh(source, root):
+    """Preserve the actual Meshing output, without conversion or smoothing."""
+    source = Path(source).resolve(strict=True)
+    if not source.is_file() or source.stat().st_size == 0:
+        raise ValueError(f'Native Meshing outputMesh is missing or empty: {source}')
+    # glTF can reference a sibling .bin: preserve its native UID directory as
+    # a bundle instead of moving only the JSON document and breaking references.
+    bundle = Path(root) / 'meshing-output' if source.suffix.lower() == '.gltf' else None
+    destination = bundle / source.name if bundle else Path(root) / ('mesh' + source.suffix)
+    if bundle and bundle.exists():
+        raise FileExistsError(f'Preserve previous mesh bundle: {bundle}')
+    if destination.exists():
+        raise FileExistsError(f'Preserve previous mesh export: {destination}')
+    digest = sha(source)
+    if bundle:
+        shutil.copytree(source.parent, bundle)
+    else:
+        shutil.copyfile(source, destination)
+    if sha(destination) != digest or sha(source) != digest:
+        raise ValueError('Mesh changed during copy; preserve both files and inspect')
+    return {'path': str(destination), 'native_path': str(source), 'sha256': digest,
+            'bytes': destination.stat().st_size, 'bundle_directory': str(bundle) if bundle else None,
+            'node_output': 'Meshing.outputMesh',
+            'processing': 'native raw mesh; no MeshFiltering or smoothing'}
 
 
 def preflight_masks(base, masks):
@@ -237,6 +279,7 @@ def prepare(args):
     root = outside(args.run)
     if root.exists():
         raise FileExistsError('Choose a fresh run directory; resume the saved project explicitly')
+    cache = outside(args.cache) if getattr(args, 'cache', None) else root / 'cache'
     config_path = args.settings.resolve(strict=True)
     config = read(config_path)
     base = config_path.parent
@@ -271,19 +314,13 @@ def prepare(args):
     filename = 'photogrammetry.mgt' if pipeline == 'standard' else 'photogrammetryLegacy.mgt'
     template = args.meshroom.resolve() / 'aliceVision/share/meshroom' / filename
     with module.GraphModification(graph):
-        graph.initFromTemplate(str(template))
-        # Stop at native dense geometry. Presentation/texturing is separate.
-        for item in list(graph.nodes):
-            if item.nodeType in ('Texturing', 'MeshFiltering', 'CopyFiles'):
-                graph.removeNode(item.name)
+        graph.initFromTemplate(str(template), keepOutputNodes=True)
+        # Preserve the template. Native --toNode selects the computation endpoint.
         for name, values in config.get('nodes', {}).items():
             settings(graph.node(name), values)
         settings(node(graph, 'FeatureExtraction'), {'maxThreads': threads})
         if pipeline == 'standard':
-            # A baseline changes scale, not the SfM orientation or origin.
-            settings(node(graph, 'SfMTransform'), {
-                'method': 'transformation', 'transformation': '', 'scale': 1.,
-                'applyScale': True, 'applyRotation': False, 'applyTranslation': False})
+            configure_standard_transform(graph, config.get('nodes', {}))
         if masks:
             configure_masks(graph, pipeline, masks, *mask_input)
         camera = node(graph, 'CameraInit')
@@ -295,8 +332,8 @@ def prepare(args):
         raise ValueError('Native template contains compatibility nodes')
     mask_inputs = (validate_masks(*mask_input, camera_mask_views(camera)) if masks else None)
     root.mkdir(parents=True)
-    project, cache = root / 'project.mg', root / 'cache'
-    cache.mkdir()
+    project = root / 'project.mg'
+    cache.mkdir(parents=True, exist_ok=True)
     graph.save(str(project))
     graph.setExplicitCacheDir(str(cache))
     graph.save(str(project))
@@ -307,6 +344,7 @@ def prepare(args):
                  'template_sha256': sha(template),
                  'sparse_node': node(graph, 'SfMExpanding' if pipeline == 'standard' else 'StructureFromMotion').name,
                  'dense_node': node(graph, 'Meshing').name,
+                 'result_nodes': result_nodes(graph),
                  'nodes': {item.name: item.toDict() for item in graph.nodes}}
     if mask_inputs is not None:
         effective['mask_inputs'] = mask_inputs
@@ -390,7 +428,11 @@ def export(args):
     source = (node(graph, 'SfMTransform').output.value
               if effective['settings']['pipeline'] == 'standard'
               else node(graph, 'DepthMap').input.value)
-    dense = node(graph, 'Meshing').output.value
+    meshing = node(graph, 'Meshing')
+    dense = meshing.output.value
+    # This output is already produced by the same Meshing calculation as the cloud.
+    # Copy bytes instead of rebuilding a surface from dense.ply.
+    mesh = save_native_mesh(meshing.outputMesh.value, root)
     convert(source, scene, 'markers')
     convert(dense, cloud, 'cloud')
     if plan['mode'] != 'unknown':
@@ -408,7 +450,9 @@ def export(args):
         write(evidence_path, evidence)
         effective['scale']['applied_evidence'] = str(evidence_path)
     effective['artifacts'] = {'scene': str(scene), 'cloud': str(cloud),
-                              'native_scene': str(source), 'native_dense': str(dense)}
+                              'native_scene': str(source), 'native_dense': str(dense),
+                              'mesh': mesh['path'], 'native_mesh': mesh['native_path']}
+    effective['mesh_export'] = mesh
     write(root / 'effective-settings.json', effective)
 
 
@@ -424,6 +468,7 @@ def main():
     item.add_argument('settings', type=Path)
     item.add_argument('run', type=Path)
     item.add_argument('meshroom', type=Path)
+    item.add_argument('--cache', type=Path, help='Explicit native cache for serial reuse by a new run; default RUN/cache')
     item.set_defaults(function=prepare)
     for name, function in [('verify', verify), ('scale', scale), ('export', export)]:
         item = commands.add_parser(name)
