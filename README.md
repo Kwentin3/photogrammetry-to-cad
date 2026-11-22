@@ -10,8 +10,8 @@
 через SAM2.1-small + локальный HF GroundingDINO-tiny и PNG-вход Standard.
 Реальные 37 масок прошли до cloud/mesh: окружающий пол удалён, широкая лицевая
 поверхность сохранена, боковины и нижние края неполны. [Отчёт и сравнение](docs/reports/2026-11-22/auto-masks.md),
-[инструкция](docs/auto-masks.md). Backup проверен, GPU удалена, расходы $0.243.
-Итоговая независимая приёмка и публикация выполняются.
+[инструкция](docs/auto-masks.md). Backup проверен, GPU удалена, текущий ledger $0.255.
+Независимая приёмка PASS; поставка опубликована в [PR #13](https://github.com/Kwentin3/photogrammetry-to-cad/pull/13).
 
 В [Goal #8](docs/goal-8.md) принят аудит и доработка Meshroom harness для домена
 фото/видео → облако, mesh и связанные выходы; [поставка PR #10](https://github.com/Kwentin3/photogrammetry-to-cad/pull/10)
