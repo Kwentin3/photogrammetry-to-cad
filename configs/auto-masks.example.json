@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "images": "../../capture/images",
+  "input_manifest": "../../capture/manifest.json",
+  "models_manifest": "auto-mask-models.json",
+  "model_directory": "../../auto-mask-models",
+  "prompt": "a wooden chair.",
+  "selection": "single",
+  "box_threshold": 0.3,
+  "text_threshold": 0.25,
+  "device": "cuda",
+  "preview_count": 6
+}

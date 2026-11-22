@@ -1,0 +1,16 @@
+# Linux x86_64 / CPython 3.12; optional ML environment, never base Meshroom.
+# SAM2 source is separately pinned in configs/auto-mask-models.json.
+# Resolve with uv 0.9.15, --python-platform x86_64-manylinux_2_39,
+# --python-version 3.12 --generate-hashes (official PyPI index only).
+# Linux PyPI torch 2.5.1 wheels declare their CUDA 12.4 runtime dependencies.
+torch==2.5.1
+torchvision==0.20.1
+transformers==4.51.3
+numpy==2.2.5
+pillow==11.2.1
+tqdm==4.67.1
+hydra-core==1.3.2
+iopath==0.1.10
+pip==25.0.1
+setuptools==75.8.0
+wheel==0.45.1
