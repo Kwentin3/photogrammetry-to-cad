@@ -1,7 +1,8 @@
 # Goal #6 — фото/видео → реконструкция
 
 Источник: [issue #6](https://github.com/Kwentin3/photogrammetry-to-cad/issues/6).
-Обновлено 21 ноября 2026. Статус: **завершено, независимая приёмка PASS**.
+Обновлено 22 ноября 2026. Технический прогон и ограниченная доработка повторного
+ревью PR #7 приняты с независимой приёмкой **PASS**.
 Поставка опубликована в [PR #7 к main](https://github.com/Kwentin3/photogrammetry-to-cad/pull/7).
 PR открыт и не влит; это статус публикации, а не утверждение об обновлённой main.
 
@@ -151,3 +152,116 @@ planner, не сочиняет физические размеры и не об�
 совпали с принятой реконструкцией, SHA всех семи входных файлов не изменились.
 Исторические native результаты/источники в backup не переписывались; изменения
 после этой приёмки проверены локально, как запрошено в ревью.
+
+## Текущий GOAL: повторное ревью PR #7
+
+Источник — [повторное ревью](https://github.com/Kwentin3/photogrammetry-to-cad/pull/7#issuecomment-7068500585),
+принято владельцем в работу 22 ноября. Это единственная рабочая запись доработки.
+Принятый видеорезультат и исторические отчёты не пересчитываем и не переписываем.
+Новая аренда GPU, расширение режимов и CAD в объём не входят; PR не сливаем.
+
+Результат: повторный вход сохраняет конфигурацию; запрошенные маски полностью
+сопоставлены кадрам по закреплённым native правилам и размерам, а их изменение
+не позволяет незаметно продолжить старый запуск; поддерживаемые метки ограничены
+CCTag3; активные страницы согласованы с проверенным Standard/Legacy.
+
+Проверено на исходном head `f1bdcc43943d73faf3391059895fc341716d68df`:
+reconnect содержит безусловный `cp`; preflight масок проверяет лишь расширение;
+`load()` сверяет фото/manifest/settings, но не байты масок. Native compute
+запускается отдельной командой: hash argv в runner не подтверждает входные данные.
+
+Обязательный объём доработки:
+
+1. Исправить конкретные пробелы и добавить небольшие поведенческие проверки.
+2. Сверить семь вопросов ревью с кодом, инструкцией и сохранённым evidence;
+   различить локальные проверки, native прогон и неизученные ограничения.
+3. Выполнить независимую приёмку дельты, опубликовать проверенные правки в PR #7
+   и краткий ответ со ссылками; проверить remote head и закрыть свои ресурсы.
+
+Реализованы: reconnect без перезаписи; полный native lookup viewId → source stem
+после CameraInit и до создания RUN; полное декодирование маски bundled
+`pyalicevision.image.Image_uchar` в LINEAR и точные width/height; `mask_inputs`
+в effective-settings и публичный `verify RUN` перед compute/resume; ограничение
+на canonical `cctag3` в Legacy. Старые немаскированные RUN совместимы; masked RUN
+без binding требует новой подготовки. Изменённые файлы не «перепривязываются»
+к старому кэшу пересозданием manifest.
+
+Граница владельцев: CameraInit → native view ID/размеры → mask preflight;
+AliceVision → native порядок имени/декодер → тонкая проверка полного покрытия;
+prepare → snapshot фактически выбранных mask bytes → verify/load.
+Существующий `load()` и новый CLI используют одну проверку входов. Native граф,
+UID, вычисления, кэш и runner не заменены. Хэши — контроль неизменности доверенной
+рабочей записи, не подпись происхождения и не доказательство применения alpha.
+
+Порядок и reader сверены с pinned AliceVision `d012d055…`:
+[FeatureExtractor.cpp](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/aliceVision/featureEngine/FeatureExtractor.cpp#L179),
+[tryLoadMask](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/aliceVision/image/io.cpp#L1454).
+Native dense проверяет площадь, а не обе размерности; preflight намеренно строже:
+[ExportImages](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/software/utils/main_exportImages.cpp#L233),
+[PrepareDenseScene](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/software/pipeline/main_prepareDenseScene.cpp#L231).
+Image_uchar/readImage/width/height/LINEAR проверены по SWIG-файлу сохранённого
+архива. Локальные тесты реально декодируют PNG через Pillow на границе reader;
+импорт Linux pyalicevision и новый masked compute в этой доработке не выполнялись.
+
+Проверка кандидата: 44 unittest PASS, включая настоящий CLI `verify`, реальные
+изменения mask/photo/manifest/settings bytes и декодирование PNG локальным Pillow.
+14 Bash-блоков runbook прошли `bash -n`; настоящий Git Bash дважды повторил
+reconnect на настроенном JSON (Legacy/новая съёмка/threads3), байты не изменились.
+Повторное первое создание отказало без изменения файла. Использовались временные
+deployment paths и инертный env.sh; это проверка инструкции, не bootstrap Meshroom.
+Private evidence: `issue-6/validation/pr7-repeat-review-runbook.json` рядом с
+сохранёнными материалами владельца вне Git. Временные fixture directories убраны.
+
+### Ответы на семь вопросов самопроверки
+
+1. **Новая съёмка другим агентом.** README ведёт в [runbook](runbook.md) и
+   [матрицу режимов](meshroom-modes.md): Standard по умолчанию, Legacy для CCTag3
+   и fallback; пути/качество/потоки задаются JSON. Источник кадров, manifest,
+   выбор RUN/JOB, backup и resume описаны файлами репозитория. Доступ, съёмку и
+   сохранённый pinned runtime archive владелец передаёт отдельно; они не в Git.
+2. **Успех команды при неполном объекте.** [Отчёт](reports/2026-11-21/photo-video-3d.md)
+   показывает два направления, описывает коробку, фон/пол и пропуски по краям.
+   Report даёт камеры, точки и bbox, но не выделяет нужный объект и не оценивает
+   его полноту автоматически. Runbook требует сравнить виды с исходными кадрами
+   и описать охват/пропуски до передачи дальше; произвольного quality threshold нет.
+3. **Прерывание и замена входов.** `prepare` отказывается перезаписывать RUN;
+   effective-settings фиксирует config/manifest SHA, manifest — фото bytes/SHA,
+   mask_inputs — соответствия и mask bytes/SHA. Новый `verify` и тот же helper
+   в `load` отвергают реальные замены при прежних путях. Перед прямым native
+   compute/resume `verify` обязателен по runbook; сам meshroom_compute не запускает
+   Python-проверку. Runner отдельно сверяет argv/cwd и cleanup receipt.
+   Новый материал требует нового manifest и RUN, а не принятия старого кэша.
+4. **Масштаб.** Реальное видео — unknown; виртуальный target100 — отдельный
+   synthetic probe. Измеренная база требует Legacy/CCTag3, источник реального
+   замера и units. `export` сверяет расстояние после native SfMTransform с target,
+   ID/наблюдения и числовой допуск; receipt связан с SHA scene, Report проверяет
+   его режим/единицы/источник. Это не независимая оценка остальных размеров.
+5. **Полезность тестов.** Тесты меняют настоящие файлы, полностью декодируют PNG,
+   различают view ID/stem priority, missing/corrupt/same-area wrong W/H,
+   запускают public verify CLI и проверяют отказ после замены. Attribute doubles
+   проверяют только передачу EXR/metadata. Подтверждение native compute — прежний
+   реальный видеопрогон и исторический masked #4; новый общий masked путь проверен
+   локально и статически по pinned исходнику, не новым запуском Meshroom.
+6. **Обещания и поддержка.** Базовый Standard без масок и regular видео реально
+   проверены. CCTag4 отвергается, canonical cctag3 — единственная разрешённая семья
+   Legacy. Mask preflight не доказывает применение маски в dense; masked Standard,
+   smart selection, turntable, two sides/segmentation plugins не объявлены готовыми.
+   Полные XYZ marker_coords остаются отдельным историческим рецептом, не режимом
+   общего adapter. Статусы и ограничения — в матрице/runbook.
+7. **Объём обвязки.** Native templates, CameraInit, SfMTransform, UID/cache и
+   compute сохраняют владельцев. В этой дельте нет своего декодера, frame selector,
+   graph planner или runner: bundled reader декодирует маски, тонкий preflight
+   закрывает native silent skip и snapshot проверяет неизменность входов.
+   `verify_run_inputs` переиспользован в существующем load и новом CLI; при
+   выключенных masks базовый маршрут дополнительных зависимостей не получает.
+
+Независимая локальная приёмка дельты — **PASS** по всем пяти группам требований
+повторного ревью. Проверен код `reconstruction.py` SHA256
+`6073f23801ced3fd3be3d40a13196476e4c7ca7fe966d8568a4e36c168698cca`.
+Рабочая ветка и PR #7 сохранены; отдельный новый PR не нужен. Публикация этой
+доработки включает ответ в PR с семью выводами и проверку remote head.
+Новых платных или фоновых ресурсов нет; fixture directories убраны,
+частные evidence/SWIG сохранены вне Git для повторной проверки.
+
+Следующий продуктовый шаг остаётся отдельным заданием: объект/участок,
+контрольные замеры и допуск для геометрии/CAD. Слияние PR требует отдельного действия.

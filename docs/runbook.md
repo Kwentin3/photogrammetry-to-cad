@@ -133,13 +133,23 @@ setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/bootstrap" 600 -- \
 
 Дождаться `state=succeeded`, `cleanup=confirmed`, прочитать probes/logs,
 проверить `nvidia-smi`. Bootstrap проверяет архив/ldd/CLI/imports, не dense PASS.
-Каждый новый SSH shell заново задаёт пути и делает `source env.sh`:
+Один раз создать настройки новой съёмки. Команда откажет, если файл уже существует:
 
 ```bash
+(set -o noclobber; cat "$REPO/configs/reconstruction.example.json" >"$WORK/config/standard.json")
+```
+
+При первом входе и в каждом новом SSH shell заново задать все пути и загрузить
+окружение. Здесь используется уже сохранённый JSON; повторно копировать шаблон
+поверх него нельзя:
+
+```bash
+set -euo pipefail
+export REPO=/root/photo-cad/repo WORK=/root/photo-cad/work
 export MESHROOM_ROOT=/root/photo-cad/runtime/Meshroom-2026.11.21-b12ea88-linux
 source "$MESHROOM_ROOT/env.sh"
-cp "$REPO/configs/reconstruction.example.json" "$WORK/config/standard.json"
 export SETTINGS="$WORK/config/standard.json"
+test -f "$SETTINGS"
 ```
 
 После source все Linux Python-команды — только `"$MESHROOM_PYTHON"` (bundled 3.11),
@@ -216,7 +226,8 @@ renameKeyframes=false сохраняют zero-based source indices; native frame
 `seal --probe ffprobe.json` связывает файл метаданных по SHA; timestamps требуют
 реального decoded-frame mapping. Проверить всю траекторию, blur, перекрытие и
 portrait orientation до MVS. При blur доступен native smart отбор по sharpness/flow;
-отдельный самописный ранжировщик не нужен.
+он изучен по интерфейсу, но в Goal #6 реально проверен только regular отбор.
+Отдельный самописный ранжировщик не нужен.
 
 ## Подготовка, sparse, масштаб, dense и экспорт
 
@@ -233,7 +244,11 @@ setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/prepare-standard" 300 -
 
 Prepare проверяет manifest, применяет настройки **до native CameraInit**,
 загружает установленный template и сохраняет project.mg/cache/effective-settings.json.
-Existing RUN не перезаписывается. После succeeded прочитать фактический маршрут:
+Existing RUN не перезаписывается. От prepare до завершения входные настройки,
+manifest, изображения и выбранные маски сохраняются неизменными. Команда `verify`
+без загрузки runtime сверяет их с сохранёнными SHA и receipt масок; перед каждым
+native compute требуется её успешное завершение. После succeeded прочитать
+фактический маршрут:
 
 ```bash
 mapfile -t ROUTE < <("$MESHROOM_PYTHON" - "$RUN/effective-settings.json" <<'PY'
@@ -248,6 +263,7 @@ PY
 )
 [[ ${#ROUTE[@]} == 5 ]]
 PROJECT=${ROUTE[0]}; CACHE=${ROUTE[1]}; SPARSE=${ROUTE[2]}; DENSE=${ROUTE[3]}; IMAGES_NODE=${ROUTE[4]}
+"$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" verify "$RUN"
 setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/sparse-standard" 900 -- \
   taskset -c "$CPUS" "$MESHROOM_ROOT/meshroom_compute" "$PROJECT" --cache "$CACHE" --toNode "$SPARSE" \
   >"$WORK/jobs/sparse-standard-launch.log" 2>&1 </dev/null
@@ -260,6 +276,7 @@ setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/sparse-standard" 900 --
 ```bash
 bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/scale-standard" 120 -- \
   taskset -c "$CPUS" "$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" scale "$RUN"
+"$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" verify "$RUN"
 setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/images-standard" 600 -- \
   taskset -c "$CPUS" "$MESHROOM_ROOT/meshroom_compute" "$PROJECT" --cache "$CACHE" --toNode "$IMAGES_NODE" \
   >"$WORK/jobs/images-standard-launch.log" 2>&1 </dev/null
@@ -271,6 +288,7 @@ Standard использует **ExportImages**, без PDS adapter. Legacy ис�
 adapter отдельным новым JOB_DIR, **до dense QA**:
 
 ```bash
+"$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" verify "$RUN"
 setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/pds-adapter-legacy" 600 -- \
   taskset -c "$CPUS" "$MESHROOM_PYTHON" "$REPO/scripts/prepare_dense_images.py" "$PROJECT" --cache "$CACHE" \
   >"$WORK/jobs/pds-adapter-legacy-launch.log" 2>&1 </dev/null
@@ -283,6 +301,7 @@ setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/pds-adapter-legacy" 600
 ```bash
 bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/qa-standard" 300 -- \
   taskset -c "$CPUS" "$MESHROOM_PYTHON" "$REPO/scripts/check_dense_images.py" "$RUN"
+"$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" verify "$RUN"
 setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/dense-standard" 1800 -- \
   taskset -c "$CPUS" "$MESHROOM_ROOT/meshroom_compute" "$PROJECT" --cache "$CACHE" --toNode "$DENSE" \
   >"$WORK/jobs/dense-standard-launch.log" 2>&1 </dev/null
@@ -336,8 +355,12 @@ receipt запрещает resume и требует проверки остав�
 Старая попытка без process-tree receipt тоже требует ручной проверки. Возврат
 инструмента или отсутствие одного PGID не доказывает завершения всех участников.
 Resume: `bash remote_job.sh JOB TTL --resume -- COMMAND ...` — только тот же cwd
-и точный argv. Изменённая команда/cwd требует нового JOB; изменённые съёмка или
-настройки — нового RUN/project. Native успешные chunks используются повторно
+и точный argv. После нового SSH-входа восстановить пути/окружение по разделу выше,
+выбрать прежний RUN из карточки, заново прочитать его ROUTE и выполнить
+`"$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" verify "$RUN"` до resume.
+Изменённая команда/cwd требует нового JOB; изменённые съёмка, настройки или маски —
+нового RUN/project. Старые немаскированные RUN поддерживаются; masked RUN без
+receipt не продолжается и требует новой подготовки. Native успешные chunks используются повторно
 без forceCompute. Не добавлять force/status flags и не рисовать SUCCESS.
 У compute — `--cache`, у batch — `--overrideCacheDir`.
 
@@ -460,25 +483,45 @@ if ($LASTEXITCODE -ne 0) { throw 'Reconstruction report failed' }
 точки/bbox и происхождение масштаба. status=reported не означает продуктовый PASS.
 Открыть новое облако существующим инструментом геометрии/CloudCompare, сохранить
 короткий вид и описать восстановленное, пропуски и нужную повторную съёмку.
+Сверить несколько направлений с исходными кадрами: какие видимые поверхности
+и края восстановлены, где есть разрывы, фон или лишняя геометрия. Это визуальная
+проверка покрытия, без произвольного порога числа точек или доли камер.
+Она не измеряет скрытые стороны, физическую точность и пригодность к изготовлению.
 
 ## Маски, масштаб и дополнительные режимы
 
-Готовые маски: masks.folder/extension/features/invert; папка должна содержать
-хотя бы один файл с указанным расширением до загрузки runtime. Для masked Legacy
-обязательны EXR с alpha и camera metadata: adapter задаёт outputFileType=exr и
-saveMetadata=true. Для dense уже нужна полярность keep=nonzero, reject=zero. Размеры/имена соответствуют кадрам или
-native view IDs. Автосегментация, turntable и две стороны остаются изученными,
-пока нет их реального прогона; зависимости/ограничения — в [матрице](meshroom-modes.md).
+Готовые маски: masks.folder/extension/features/invert. Требуется полное покрытие
+всех кадров; partial masking общий путь не поддерживает. После native CameraInit,
+до создания RUN и основного расчёта, проверяется соответствие: сначала
+`<viewId>.<extension>`, затем `<source_stem>.<extension>`, в порядке native lookup.
+У выбранной маски должны совпадать ширина и высота исходного кадра. Receipt
+связывает выбранные файлы с SHA; `verify` проверяет их неизменность до compute/resume.
+Для masked Legacy обязательны EXR с alpha и camera metadata: adapter задаёт
+outputFileType=exr и saveMetadata=true. Для dense нужна полярность keep=nonzero,
+reject=zero. Эти проверки общего adapter локальные; нового masked GPU-прогона
+не было, полный masked Standard не квалифицирован. Автосегментация, turntable
+и две стороны остаются изученными, пока нет их реального прогона;
+зависимости/ограничения — в [матрице](meshroom-modes.md).
 
 По умолчанию scale.mode=unknown: произвольные SfM units, без физических мм.
 Для измеренной базы выбрать **Legacy**, включить cctag3 в FeatureExtraction и
 FeatureMatching и передать measured_baseline: два разных IDs 0..31, положительное
 distance, units mm/cm/m и measurement_source реального замера. Adapter вычисляет
 отношение к native базе и передаёт scalar SfMTransform без смены углов/осей/начала.
-Положения меток и наблюдения должны быть однозначны. Native исполнение/численная
-проверка имеют отдельный статус в Goal #6; они не доказывают физическую точность.
+Положения меток и наблюдения должны быть однозначны. В Goal #6 native scalar
+проверен на отдельном синтетическом SfM; реальные видео имеют unknown scale.
+Локальные проверки adapter и численный synthetic probe не квалифицируют
+измеренную базу на новой реальной съёмке и не доказывают физическую точность.
 Любой describer с префиксом cctag, без учёта регистра, отклоняется в Standard:
 CCTag ID encoding нового DAG пока не квалифицирован.
+В Legacy разрешено только native написание `cctag3`: другие CCTag-семьи
+и варианты написания отклоняются до runtime, поскольку экспорт и расчёт базы
+рассчитаны на CCTag3.
+
+Локальные Python-проверки: `python -m unittest discover -s tests -p 'test_*.py'`.
+Они используют Open3D/build123d и Pillow для настоящего чтения тестовых PNG.
+Pillow не становится зависимостью GPU runtime: маски там читает bundled
+pyalicevision. Локальный тест decoder boundary не является native masked compute.
 
 marker_coords с полными XYZ зарезервирован и общим adapter отвергается:
 использовать только отдельно проверенный исторический native from_markers рецепт

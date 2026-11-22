@@ -137,6 +137,102 @@ def configure_masks(graph, pipeline, masks, folder, extension):
     settings(dense, values)
 
 
+def mask_files(folder, extension, views):
+    """Match native ID-before-stem lookup; every requested view must be covered."""
+    matched, errors = [], []
+    for view in views:
+        candidates = (folder / f"{view['view_id']}.{extension}",
+                      folder / (Path(view['image']).stem + '.' + extension))
+        path = next((candidate for candidate in candidates if candidate.exists()), None)
+        if path is None:
+            errors.append(f"{view['image']} (view {view['view_id']}): missing {candidates[0].name} or {candidates[1].name}")
+        elif not path.is_file():
+            errors.append(f"{view['image']} (view {view['view_id']}): mask is not a file: {path}")
+        else:
+            matched.append({**view, 'path': str(path.resolve()),
+                            'bytes': path.stat().st_size, 'sha256': sha(path)})
+    if errors:
+        raise ValueError('Masks do not cover every frame:\n' + '\n'.join(errors))
+    return matched
+
+
+def native_mask_size(path):
+    # Use the bundled reader used by the native pipeline, not an extra package.
+    from pyalicevision import image as av
+    options = av.ImageReadOptions()
+    options.workingColorSpace = av.EImageColorSpace_stringToEnum('linear')
+    image = av.Image_uchar()
+    av.readImage(str(path), image, options)
+    return image.width(), image.height()
+
+
+def validate_masks(folder, extension, views, read_size=native_mask_size):
+    files = mask_files(folder, extension, views)
+    errors = []
+    for item in files:
+        try:
+            actual = tuple(read_size(Path(item['path'])))
+            expected = (item['width'], item['height'])
+            if actual != expected or min(actual) <= 0:
+                errors.append(f"{item['image']} (view {item['view_id']}): {item['path']} has {actual}, expected {expected}")
+            if sha(item['path']) != item['sha256']:
+                errors.append(f"{item['image']}: mask changed while being checked")
+        except (OSError, ValueError, RuntimeError) as error:
+            errors.append(f"{item['image']} (view {item['view_id']}): unreadable mask {item['path']}: {error}")
+    if errors:
+        raise ValueError('Invalid masks:\n' + '\n'.join(errors))
+    return {'folder': str(folder), 'extension': extension, 'files': files,
+            'coverage': 'all_input_views', 'lookup': 'view_id_then_image_stem',
+            'reader': 'pyalicevision.image / bundled OpenImageIO'}
+
+
+def camera_mask_views(camera):
+    intrinsics = {item['intrinsicId']: item for item in camera.intrinsics.getPrimitiveValue()}
+    views = []
+    for view in camera.viewpoints.getPrimitiveValue():
+        intrinsic = intrinsics[view['intrinsicId']]
+        width, height = int(intrinsic['width']), int(intrinsic['height'])
+        if view['viewId'] < 0 or min(width, height) <= 0:
+            raise ValueError(f"CameraInit did not provide mask identity/dimensions for {view['path']}")
+        views.append({'image': view['path'], 'view_id': view['viewId'],
+                      'width': width, 'height': height})
+    return views
+
+
+def verify_run_inputs(run):
+    """Check saved input bindings without importing Meshroom or changing the run."""
+    root = outside(run).resolve(strict=True)
+    effective = read(root / 'effective-settings.json')
+    config = effective['settings']
+    config_path = Path(effective['settings_file'])
+    if sha(config_path) != effective['settings_sha256']:
+        raise ValueError('Settings file changed; create a new run')
+    images = (config_path.parent / config['images']).resolve(strict=True)
+    verify_images(images, Path(effective['input_manifest']))
+    if sha(effective['input_manifest']) != effective['input_manifest_sha256']:
+        raise ValueError('Input manifest changed; create a new run')
+    if config.get('masks'):
+        receipt = effective.get('mask_inputs')
+        if not receipt:
+            raise ValueError('Masked run has no verified mask binding; create a new run')
+        folder, extension = preflight_masks(config_path.parent, config['masks'])
+        views = [{key: item[key] for key in ('image', 'view_id', 'width', 'height')}
+                 for item in receipt['files']]
+        current = mask_files(folder, extension, views)
+        if current != receipt['files']:
+            changed = [item['image'] for item, previous in zip(current, receipt['files']) if item != previous]
+            raise ValueError('Masks changed; create a new run: ' + ', '.join(changed))
+    return root, effective
+
+
+def verify(args):
+    root, effective = verify_run_inputs(args.run)
+    print(json.dumps({'status': 'verified', 'run': str(root),
+                      'input_manifest_sha256': effective['input_manifest_sha256'],
+                      'settings_sha256': effective['settings_sha256'],
+                      'mask_count': len(effective.get('mask_inputs', {}).get('files', []))}))
+
+
 def prepare(args):
     root = outside(args.run)
     if root.exists():
@@ -158,10 +254,14 @@ def prepare(args):
         raise ValueError('Invalid physical scale mode')
     if scale['mode'] == 'marker_coords':
         raise ValueError('Use the historical native from_markers recipe for surveyed XYZ; this adapter qualifies scalar scale only')
-    describers = config.get('nodes', {}).get('FeatureExtraction_1', {}).get('describerTypes', ['sift'])
+    describers = [describer for values in config.get('nodes', {}).values()
+                  for describer in values.get('describerTypes', [])]
     if pipeline == 'standard' and (scale['mode'] != 'unknown' or any(
             str(describer).lower().startswith('cctag') for describer in describers)):
         raise ValueError('CCTag ID encoding in the new SfM DAG is unqualified; choose legacy for marker diagnostics/scale')
+    if any(str(describer).lower().startswith('cctag') and describer != 'cctag3'
+           for describer in describers):
+        raise ValueError('Only cctag3 (exact native spelling) is supported for CCTag export and baseline scale')
     masks = config.get('masks')
     mask_input = preflight_masks(base, masks) if masks else None
     for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS'):
@@ -193,6 +293,7 @@ def prepare(args):
         raise ValueError('CameraInit did not admit every verified input image')
     if any(item.isCompatibilityNode for item in graph.nodes):
         raise ValueError('Native template contains compatibility nodes')
+    mask_inputs = (validate_masks(*mask_input, camera_mask_views(camera)) if masks else None)
     root.mkdir(parents=True)
     project, cache = root / 'project.mg', root / 'cache'
     cache.mkdir()
@@ -207,22 +308,14 @@ def prepare(args):
                  'sparse_node': node(graph, 'SfMExpanding' if pipeline == 'standard' else 'StructureFromMotion').name,
                  'dense_node': node(graph, 'Meshing').name,
                  'nodes': {item.name: item.toDict() for item in graph.nodes}}
+    if mask_inputs is not None:
+        effective['mask_inputs'] = mask_inputs
     write(root / 'effective-settings.json', effective)
     print(json.dumps({key: effective[key] for key in ('project', 'cache', 'sparse_node', 'dense_node')}))
 
 
 def load(run):
-    root = outside(run).resolve(strict=True)
-    effective = read(root / 'effective-settings.json')
-    config = effective['settings']
-    config_path = Path(effective['settings_file'])
-    # Never silently change capture/settings between stages or after resume.
-    if sha(config_path) != effective['settings_sha256']:
-        raise ValueError('Settings file changed; create a new run')
-    images = (config_path.parent / config['images']).resolve(strict=True)
-    verify_images(images, Path(effective['input_manifest']))
-    if sha(effective['input_manifest']) != effective['input_manifest_sha256']:
-        raise ValueError('Input manifest changed')
+    root, effective = verify_run_inputs(run)
     module, _ = init_runtime(Path(effective['meshroom_root']))
     graph = module.loadGraph(effective['project'], strictCompatibility=True)
     graph.cacheDir = effective['cache']
@@ -332,7 +425,7 @@ def main():
     item.add_argument('run', type=Path)
     item.add_argument('meshroom', type=Path)
     item.set_defaults(function=prepare)
-    for name, function in [('scale', scale), ('export', export)]:
+    for name, function in [('verify', verify), ('scale', scale), ('export', export)]:
         item = commands.add_parser(name)
         item.add_argument('run', type=Path)
         item.set_defaults(function=function)
