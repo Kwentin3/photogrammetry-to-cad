@@ -155,8 +155,9 @@ class GenerateMasksTests(unittest.TestCase):
 
     def test_union_keeps_all_instances(self):
         class TwoInstances(InferenceBoundary):
-            def detect(self, *args):
-                return super().detect(*args) * 2
+            def detect(self, image, prompt, *args):
+                return [{'box_xyxy': [1, 1, 3, 3], 'score': .9, 'text': prompt},
+                        {'box_xyxy': [5, 2, 7, 4], 'score': .8, 'text': prompt}]
             def segment(self, image, candidates):
                 a, b = Image.new('L', image.size), Image.new('L', image.size)
                 a.putpixel((1, 1), 255)
@@ -165,10 +166,50 @@ class GenerateMasksTests(unittest.TestCase):
         self.config['selection'] = 'union'
         result = self.run_fixture(TwoInstances)
         self.assertEqual(result['status'], 'complete')
+        for frame in result['frames']:
+            self.assertEqual([item['candidate_index'] for item in frame['segments']], [0, 1])
+            self.assertEqual([item['keep_pixels'] for item in frame['segments']], [1, 1])
+            self.assertEqual([item['zero'] for item in frame['segments']], [False, False])
         with Image.open(result['frames'][0]['mask']['path']) as image:
             self.assertEqual(image.getpixel((1, 1)), 255)
             self.assertEqual(image.getpixel((6, 3)), 255)
             self.assertEqual(sum(image.histogram()[1:]), 2)
+
+    def test_union_reports_an_empty_selected_instance_instead_of_success(self):
+        class MissingSecondInstance(InferenceBoundary):
+            def detect(self, image, prompt, *args):
+                return [{'box_xyxy': [1, 1, 3, 3], 'score': .9, 'text': prompt},
+                        {'box_xyxy': [5, 1, 7, 3], 'score': .8, 'text': prompt}]
+
+            def segment(self, image, candidates):
+                first, second = Image.new('L', image.size), Image.new('L', image.size)
+                first.putpixel((1, 1), 255)
+                return [(first, .7), (second, .8)]
+
+        self.config['selection'] = 'union'
+        result = self.run_fixture(MissingSecondInstance)
+        self.assertEqual(result['status'], 'error')
+        self.assertEqual(result['failed_frames'], 4)
+        self.assertNotIn('mask_inputs', result)
+        persisted = masks.read(self.output / 'mask-diagnostics.json')
+        self.assertEqual(persisted['status'], 'error')
+        self.assertNotIn('mask_inputs', persisted)
+        for frame in persisted['frames']:
+            self.assertEqual(frame['candidate_count'], 2)
+            self.assertEqual(frame['status'], 'error')
+            self.assertIn('selected candidate', frame['error'])
+            self.assertIn('[1]', frame['error'])
+            self.assertEqual([item['candidate_index'] for item in frame['segments']], [0, 1])
+            self.assertEqual([item['keep_pixels'] for item in frame['segments']], [1, 0])
+            self.assertEqual([item['keep_fraction'] for item in frame['segments']], [1 / 40, 0])
+            self.assertEqual([item['zero'] for item in frame['segments']], [False, True])
+            missing = frame['segments'][1]
+            self.assertEqual(frame['candidates'][missing['candidate_index']]['box_xyxy'], [5, 1, 7, 3])
+            # Preserve the partial union as evidence, never a complete mask contract.
+            with Image.open(frame['mask']['path']) as image:
+                self.assertEqual(image.getpixel((1, 1)), 255)
+                self.assertEqual(image.getpixel((6, 2)), 0)
+                self.assertEqual(sum(image.histogram()[1:]), 1)
 
     def test_empty_and_full_masks_saved_but_not_declared_success(self):
         for value in (0, 255):

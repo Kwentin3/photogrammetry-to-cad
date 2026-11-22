@@ -132,20 +132,29 @@ def select_candidates(candidates, selection, width, height):
     return candidates
 
 
-def save_mask(path, segments, size):
+def save_mask(path, segments, size, segment_diagnostics=None):
     from PIL import Image, ImageChops
 
-    mask = Image.new('L', size, 0)
+    coverage = [] if segment_diagnostics is None else segment_diagnostics
     scores = []
     if not segments:
         raise ValueError('SAM2 returned no masks')
-    for segment, score in segments:
+    for index, (segment, score) in enumerate(segments):
         if segment.mode != 'L' or segment.size != size:
             raise ValueError('SAM2 mask must be grayscale in exact source width/height')
         if any(value not in (0, 255) for _, value in segment.getcolors(256) or []):
             raise ValueError('SAM2 mask must contain only 0 and 255')
-        mask = ImageChops.lighter(mask, segment)
+        keep = segment.histogram()[255]
+        total = size[0] * size[1]
+        # Indices refer to the selected candidates in their unchanged detector order.
+        # Persist every instance's coverage before another mask can hide its failure.
+        coverage.append({'candidate_index': index, 'keep_pixels': keep,
+                         'keep_fraction': keep / total, 'zero': keep == 0,
+                         'full': keep == total, 'sam2_predicted_iou': score})
         scores.append(score)
+    mask = Image.new('L', size, 0)
+    for segment, _ in segments:
+        mask = ImageChops.lighter(mask, segment)
     with path.open('xb') as stream:
         mask.save(stream, format='PNG')
     with Image.open(path) as decoded:
@@ -282,7 +291,13 @@ def run(settings, output):
                 segments = engine.segment(image, chosen)
                 if len(segments) != len(chosen):
                     raise ValueError('SAM2 mask count differs from selected detector candidates')
-                entry['mask'] = save_mask(mask_directory / frame['mask_name'], segments, image.size)
+                entry['segments'] = []
+                entry['mask'] = save_mask(mask_directory / frame['mask_name'], segments, image.size,
+                                          segment_diagnostics=entry['segments'])
+                failed = [item['candidate_index'] for item in entry['segments'] if item['zero'] or item['full']]
+                if failed:
+                    raise ValueError(f'Empty/full masks for selected candidate indices {failed} '
+                                     'require explicit inspection; no valid target mask declared')
                 if entry['mask']['zero'] or entry['mask']['full']:
                     raise ValueError('Empty/full mask requires explicit inspection; no valid target mask declared')
                 if sha(frame['image']) != frame['sha256']:
