@@ -16,6 +16,14 @@ torchvision 0.20.1, transformers 4.51.3, SAM2.1-small и HF GroundingDINO-tiny.
 [manifest моделей](../configs/auto-mask-models.json) — исходники, веса, tokenizer
 и конфиги. Базовый bootstrap и Python Meshroom остаются прежними.
 
+При обновлении ML-версий сначала изменить `requirements-auto-masks-linux-py312.in`
+и пересобрать `.txt` с хэшами. В том же изменении синхронизировать `expected`
+в `scripts/mask_models.py`, version assertions в `scripts/bootstrap_auto_masks.sh`
+(включая CUDA build suffix `+cu124`) и версии в этой инструкции. Эти проверки
+намеренно закрепляют принятую комбинацию. Новую комбинацию проверить в свежем
+отдельном окружении: bootstrap, один настоящий кадр, затем полный набор;
+результаты прежнего GPU-прогона не квалифицируют обновлённые зависимости.
+
 До запуска сохранить вне Git полный wheelhouse из lock, архив исходников SAM2
 и все файлы моделей по manifest. Для крупных передач использовать параллельную
 загрузку/aria2 или rclone, проверяя скорость и SHA. Bootstrap ничего не скачивает.
