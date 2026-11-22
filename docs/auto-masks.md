@@ -2,8 +2,10 @@
 
 Генератор получает проверенные снимки и текст объекта, сохраняет PNG, диагностику
 и наложения на настоящие фотографии. Это отключаемый шаг перед обычным harness.
-**Статус: локальная подготовка; inference моделей и маскированная реконструкция
-ещё не выполнены.** Обязательная практическая проверка остаётся в [Goal #12](goal-12.md).
+**Статус на 22 ноября 2026: GPU inference, native PNG/EXR и новый Standard
+cloud/mesh проверены на 37 кадрах.** Маски убрали пол, сохранили широкую лицевую
+поверхность; боковины и нижние края остаются неполными. [Сопоставимые виды и ресурсы](reports/2026-11-22/auto-masks.md).
+GPU удалена, backup проверен, ledger $0.243. Итоговая приёмка — в [Goal #12](goal-12.md).
 
 ## Окружение и сохранённые файлы
 
@@ -114,5 +116,98 @@ env и выполнить обычные prepare/verify/compute/export из [run
 с новым RUN/cache. Сверить native mask path/SHA каждого source с producer diagnostic:
 native lookup сначала ищет viewId, потом stem. Prepare проверяет реальный reader/W/H.
 До MVS нужны успешные native preflight и dense-image QA; затем открыть cloud/mesh
-и сравнить с обычным Standard на тех же кадрах/настройках. Этот этап ещё не выполнен.
+и сравнить с обычным Standard на тех же кадрах/настройках.
 Для отключения задать `masks: null`, новый RUN и запускать прежний базовый рецепт.
+
+## Повтор с принятым native cache после переноса
+
+Для новой съёмки остаётся обычный prepare выше. Для **повтора того же принятого
+опыта** одного source SHA недостаточно: AliceVision может включать файловый mtime
+в view UID при отсутствии DateTimeOriginal/imageCounter/DateTime; при недостатке
+device metadata имеет значение и путь. Это видно в [закреплённом uid.cpp, строки 20–94](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/aliceVision/sfmData/uid.cpp#L20-L94).
+В пилоте архив с нормализованным `mtime=0` сохранил байты, пути и image metadata,
+но дал 74 отличия view/pose ID. Перегенерированные IDs не совместимы с прежним cache.
+
+Владельцем прежней идентичности служат сохранённые native CameraInit inputs.
+После сверки baseline/снимков/настроек подготовить полный новый шаблон с масками
+и прежним явным cache через `prepare ... --cache ...`. Затем в **новом** RUN
+импортировать только принятые CameraInit inputs штатным SDK, обновить graph,
+сохранить проект и заново связать mask receipt с actual CameraInit. Не переносить
+UID/status вручную и не менять solved geometry. Ниже содержимое короткого Python
+шага для существующего `remote_job.sh` в окружении Meshroom; BASELINE, PREPARED,
+BRANCHED — проверенный прежний, новый подготовленный и ещё не существующий RUN.
+Этот дополнительный рецепт повторяет принятый baseline Goal #6; новая съёмка
+использует обычный `prepare` выше и собственную CameraInit.
+
+```python
+import copy, pathlib, sys
+sys.path.insert(0, str(pathlib.Path(sys.argv[4]) / 'scripts'))  # REPO
+from reconstruction import (load, settings, sha, write, outside, node, preflight_masks,
+                            validate_masks, camera_mask_views)
+_, old, _, _ = load(sys.argv[1])       # BASELINE
+_, current, graph, module = load(sys.argv[2])  # PREPARED
+target = outside(sys.argv[3])         # BRANCHED; reject checkout before mkdir
+target.mkdir(exist_ok=False)
+with module.GraphModification(graph):
+    settings(graph.node('CameraInit_1'),
+             copy.deepcopy(old['nodes']['CameraInit_1']['inputs']))
+graph.update()
+project = target / 'project.mg'
+graph.save(str(project))
+effective = copy.deepcopy(current)
+effective.update(project=str(project), nodes={n.name: n.toDict() for n in graph.nodes},
+    camera_init_provenance={'source_project': old['project'],
+        'source_project_sha256': sha(old['project']), 'preserved_native_inputs': True})
+effective['mask_inputs'] = validate_masks(
+    *preflight_masks(pathlib.Path(effective['settings_file']).parent,
+                     effective['settings']['masks']),
+    camera_mask_views(graph.node('CameraInit_1')))
+write(target / 'effective-settings.json', effective)
+_, saved, graph, _ = load(target)
+graph.update()
+assert all(graph.node(name).toDict()['uid'] == value['uid']
+           for name, value in saved['nodes'].items())
+assert camera_mask_views(graph.node('CameraInit_1')) == [
+    {key: frame[key] for key in ('image', 'view_id', 'width', 'height')}
+    for frame in saved['mask_inputs']['files']]
+dense = {node(graph, kind).name for kind in
+         ('ExportImages', 'DepthMap', 'DepthMapFilter', 'Meshing')}
+upstream = (set(old['nodes']) & set(saved['nodes'])) - dense
+assert len(upstream) == 11  # Accepted pinned baseline/template in this repeat
+assert all(saved['nodes'][name]['uid'] == old['nodes'][name]['uid'] for name in upstream)
+assert all(saved['nodes'][name]['uid'] != old['nodes'][name]['uid'] for name in dense)
+planned, _ = graph.dfsToProcess(startNodes=graph.findNodes([saved['result_nodes']['meshing']]))
+assert {n.name for n in planned} == dense  # Before the first masked ExportImages
+write(target / 'native-plan.json', {'nodes': [n.name for n in planned]})
+```
+
+Сохранить код в `$WORK/branch.py` и вызвать внутри штатного bounded job:
+
+```bash
+bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/branch-masked-01" 180 -- \
+  "$MESHROOM_PYTHON" "$WORK/branch.py" "$BASELINE" "$PREPARED" "$BRANCHED" "$REPO"
+```
+
+Проверить план перед
+compute: в пилоте полный граф имел 18 nodes, 11 upstream UID совпали; изменились
+только ExportImages, DepthMap, DepthMapFilter и Meshing. Native план содержал эти
+четыре узла, после успешного ExportImages — три. Иной план требует разбора до MVS.
+
+## Что фактически проверено на GPU
+
+Offline ML bootstrap завершился за 74 с, runtime bootstrap — за 17 с.
+Генератор обработал все 37 сохранённых кадров с `prompt="cereal box."`:
+`status=complete`, failed=0, ambiguous=0, на каждом кадре ровно один candidate.
+Общее время — 21.8959 с; генерация — 13.7498 с, загрузка моделей — 4.7242 с,
+проверка входов — 1.1729 с. Peak RSS — 1858478080 байт; CUDA allocated/reserved —
+2190115840 / 2361393152 байт. Это измерения данного запуска, не требования к минимуму RAM.
+
+На восьми просмотренных overlays коробка выделена, пол исключён. На кадрах
+00000/00006/00012 местами потеряна узкая тёмная нижняя грань; на 00084/00090 верх
+уже обрезан исходной съёмкой. Ручных правок и исключённых кадров не было.
+Native PNG binding и чтение прошли для 37/37 кадров. Все 37 EXR прошли dense-image
+QA/alpha: 54.16–70.42% пикселей стали прозрачным фоном, RGB непрозрачной области
+точно совпал с baseline. После MVS actual cloud/mesh прочитаны Open3D и просмотрены
+с двух одинаковых ракурсов: пол исключён, широкая лицевая панель сохранена,
+боковины и нижние края остаются неполными/неровными. Физический масштаб неизвестен;
+полезность и ограничения отделены от работы интеграции в [отчёте](reports/2026-11-22/auto-masks.md).

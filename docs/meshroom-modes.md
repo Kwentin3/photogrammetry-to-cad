@@ -2,7 +2,8 @@
 
 Это точка выбора сценария **фото/видео → фотограмметрическая геометрия**.
 Команды общего запуска, наблюдения, продолжения и сохранения результата —
-в [runbook](runbook.md); текущий аудит — [Goal #8](goal-8.md).
+в [runbook](runbook.md); принятый аудит — [Goal #8](goal-8.md),
+проверенная автоматическая dense-маска — [Goal #12](goal-12.md).
 CAD и распознавание деталей — следующие отдельные этапы.
 
 | Что нужно получить / как снято | Выбрать | Подробности |
@@ -90,10 +91,10 @@ Standard. Backup проверен локально, аренда удалена;
 
 ## Маски и сегментация
 
-В работе Goal #12: [отдельный SAM2.1-small/HF GroundingDINO-tiny генератор](auto-masks.md)
-передаёт PNG в существующий вход ниже. Локальная подготовка выполнена; inference
-и реальная masked Standard cloud/mesh ещё не проверены. Текущее состояние —
-в [единственной записи Goal #12](goal-12.md).
+Goal #12: [отдельный SAM2.1-small/HF GroundingDINO-tiny генератор](auto-masks.md)
+передаёт PNG в существующий вход ниже. На 37 кадрах реально проверены inference,
+native PNG/EXR и dense-only Standard cloud/mesh с теми же камерами.
+[Сравнение и ограничения](reports/2026-11-22/auto-masks.md), [запись Goal #12](goal-12.md).
 
 Маска сохраняет объект ненулевыми пикселями, исключает фон нулями. Проверяются
 полное покрытие кадров, имена (`viewId`, затем stem исходника), размеры и
@@ -101,7 +102,8 @@ Standard. Backup проверен локально, аренда удалена;
 
 | Путь | Когда / входы / основные настройки / выход | Запуск, комплект и статус |
 |---|---|---|
-| Готовые маски | Любой способ получения масок → FeatureExtraction.masksFolder при исключении фона из SfM; ExportImages.masksFolders либо Legacy PrepareDenseScene.masksFolders для плотной стадии, с явным maskExtension. Выход — признаки объекта и EXR с alpha | Настройки `masks.folder/extension/features/invert` в [runbook](runbook.md). **Рецепт**; входные проверки локальные, masked GPU-реконструкция не выполнена. Общий путь не поддерживает частичные наборы; masked Standard отдельно не квалифицирован |
+| Готовые маски | Любой способ получения масок → FeatureExtraction.masksFolder при исключении фона из SfM; ExportImages.masksFolders либо Legacy PrepareDenseScene.masksFolders для плотной стадии, с явным maskExtension. Выход — признаки объекта и EXR с alpha | Настройки `masks.folder/extension/features/invert` в [runbook](runbook.md). **Реальный Standard dense-only** с `features=false` проверен в #12, 37 кадров до cloud/mesh. Маски признаков/SfM, Legacy/стол остаются рецептами; частичные наборы не поддерживаются |
+| SAM2.1-small + local HF GroundingDINO-tiny | Отдельное pinned ML-окружение, prompt/thresholds/single либо union → полный PNG набор → существующая строка выше | **Проверено в #12** на одном реальном Standard dense-only примере. [CLI, проверка и отключение](auto-masks.md); bottom-face/edge losses и неизвестная физическая точность указаны в отчёте |
 | [ImageMasking][masking] | Однотонный фон: CameraInit.output → ImageMasking.input; algorithm=HSV (hsvHue/Range, Saturation/Value) либо AutoGrayscaleThreshold; invert, growRadius/shrinkRadius. Выход — каталог масок | В комплекте без ML. **Рецепт**: добавить node в сохранённый граф в GUI, связать CameraInit.output с input, вычислить до него, проверить маски и передать в предыдущую строку. [MaskProcessing][maskprocessing]/[MaskEroding][maskeroding] — дополнительные штатные операции над масками |
 | [photogrammetryObject.mgt][object] | Неподвижный объект на сложном фоне: фото → ImageDetectionPrompt (`prompt`, `synonyms`, thresholdDetection) → ImageSegmentationBox → masks в PrepareDenseScene. Признаки исходного SfM здесь **не** маскированы | **Нужно дополнение** [mrSegmentation][segmentation], его зависимости и веса RAM++/GroundingDINO/SAM. Шаблон есть, nodes/веса отсутствуют в полном архиве. После установки: штатный batch с этим pipeline, ввод в CameraInit_1, остановка до нужного узла. Не выполнялось |
 
