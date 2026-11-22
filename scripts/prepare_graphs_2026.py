@@ -1,4 +1,7 @@
-"""Prepare bounded native Meshroom 2026 graphs; never run reconstruction.
+"""Historical Goal #4 fixed examples; never run reconstruction.
+
+The general photo/video route is reconstruction.py (docs/runbook.md).
+This example recipe retains its original three capture-specific configurations.
 
 Run with the pinned bundle's Python and environment supplied by its bootstrap:
     python prepare_graphs_2026.py RUN_ROOT MESHROOM_ROOT [--case dice]

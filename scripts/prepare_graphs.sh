@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Main graph path: pinned Meshroom 2026 native Graph API.
+# Historical Goal #4 fixed examples. General captures: reconstruction.py/runbook.
 # Usage: bash prepare_graphs.sh RUN_ROOT MESHROOM_ROOT
 set -Eeuo pipefail
 [[ $# == 2 ]] || { echo 'Usage: prepare_graphs.sh RUN_ROOT MESHROOM_ROOT' >&2; exit 2; }

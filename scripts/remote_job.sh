@@ -21,6 +21,10 @@ if [[ ${1:-} == --resume ]]; then resume=yes; shift; fi
 for tool in flock timeout setsid sha256sum realpath ps; do
     command -v "$tool" >/dev/null || die "Missing tool: $tool"
 done
+process_python=${MESHROOM_PYTHON:-python3}
+command -v "$process_python" >/dev/null || die "Missing process-owner Python: $process_python"
+owner_helper=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/owned_process.py
+[[ -f $owner_helper ]] || die 'Missing owned process-tree helper'
 mkdir -p -- "$job_dir"
 job_dir=$(realpath -- "$job_dir")
 [[ $job_dir != / ]] || die 'Refusing root as job directory'
@@ -32,6 +36,16 @@ command_hash=${command_hash%% *}
 if [[ -f $job_dir/command.sha256 ]]; then
     [[ $resume == yes ]] || die 'Job already exists; inspect status and use --resume explicitly'
     [[ $(cat "$job_dir/command.sha256") == "$command_hash" ]] || die 'Resume command/cwd changed; use a new job directory'
+    [[ $(grep '^cleanup=' "$job_dir/status" 2>/dev/null) == 'cleanup=confirmed' ]] \
+        || die 'Prior tree cleanup is unconfirmed; inspect owned processes before resuming'
+    prior_log=$(grep '^log=' "$job_dir/status") || die 'Missing prior log; inspect before resuming'
+    [[ $prior_log != *$'\n'* ]] || die 'Ambiguous prior log; inspect before resuming'
+    prior_log=${prior_log#log=}
+    prior_log=${prior_log##*/}
+    [[ $prior_log == *.log && $prior_log != .log ]] || die 'Invalid prior log; inspect before resuming'
+    prior_receipt=$job_dir/${prior_log%.log}.owned-process
+    [[ $(grep '^cleanup=' "$prior_receipt" 2>/dev/null) == 'cleanup=confirmed' ]] \
+        || die 'Prior owned-tree receipt is missing or unconfirmed; inspect before resuming'
     if grep -q '^state=succeeded$' "$job_dir/status" 2>/dev/null; then
         printf 'Existing successful job reused: %s\n' "$job_dir"; exit 0
     fi
@@ -52,6 +66,8 @@ fi
 attempt=$(date -u +%Y%m%dT%H%M%S)-$$
 started=$(date -u +%FT%TZ)
 log=$job_dir/$attempt.log
+owned_receipt=$job_dir/$attempt.owned-process
+sha256sum "$owner_helper" >"$job_dir/$attempt.owned-helper.sha256"
 child=''; cleanup=not_started
 write_status() {
     printf 'state=%s\nexit_code=%s\nstarted_utc=%s\nupdated_utc=%s\nttl_seconds=%s\nrunner_pid=%s\nprocess_group=%s\ncleanup=%s\nlog=%s\n' \
@@ -67,7 +83,7 @@ clean_group() {
     [[ -n $child ]] || return 0
     if group_live; then
         kill -TERM -- "-$child" 2>/dev/null || true
-        for ((i=0; i<15; i++)); do group_live || break; sleep 1; done
+        for ((i=0; i<25; i++)); do group_live || break; sleep 1; done
         group_live && kill -KILL -- "-$child" 2>/dev/null || true
         for ((i=0; i<5; i++)); do group_live || break; sleep 1; done
     fi
@@ -79,6 +95,9 @@ finish() {
     trap - EXIT TERM INT
     clean_group || rc=125
     if [[ -n $child ]]; then wait "$child" 2>/dev/null || true; fi
+    if [[ -n $child ]] && ! grep -qx 'cleanup=confirmed' "$owned_receipt" 2>/dev/null; then
+        cleanup=unknown; rc=125
+    fi
     if [[ $rc == 0 ]]; then state=succeeded
     elif [[ $rc == 124 ]]; then state=timed_out
     elif [[ $rc == 137 ]]; then state=killed; fi
@@ -93,8 +112,9 @@ trap 'exit 130' INT
 trap '' HUP
 write_status starting ''
 # GNU timeout creates a separate process group; setsid also isolates it from SSH.
-# A command must not daemonize into a different session to escape these limits.
-setsid timeout --signal=TERM --kill-after=15s "${ttl}s" "$@" >"$log" 2>&1 9>&- &
+# The subreaper also owns native workers that start separate sessions.
+setsid timeout --signal=TERM --kill-after=25s "${ttl}s" \
+    "$process_python" "$owner_helper" --receipt "$owned_receipt" -- "$@" >"$log" 2>&1 9>&- &
 child=$!
 printf '%s\n' "$child" >"$job_dir/process_group.tmp"
 mv -- "$job_dir/process_group.tmp" "$job_dir/process_group"

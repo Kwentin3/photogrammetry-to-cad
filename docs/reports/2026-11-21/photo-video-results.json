@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "acceptance_source_revision": "7ed9016b5f143bdd2c94b9122a87ffe7c0d41f95",
+  "scope": "Goal6 real video to dense geometry; no physical accuracy or CAD claim",
+  "runtime": {
+    "meshroom_revision": "b12ea8896e7e95cc9911b4ec39c272914e4da726",
+    "alicevision_revision": "d012d05589b528dcf57a2a0c805c0a5709df8613",
+    "archive_sha256": "4ca3cfb0898b8000def4e68d513468a199b948329b63cdb6b257e427d295163b",
+    "image": "nvidia/cuda@sha256:ccc7187c865488c45eb2555d2d3634235aeda5b7a1de4a6dc29d031c7abd997e"
+  },
+  "capture": {
+    "source": "https://storage.googleapis.com/objectron/videos/cereal_box/batch-1/1/video.MOV",
+    "dataset": "Google Objectron",
+    "license": "C-UDA 1.0",
+    "video_bytes": 16930901,
+    "video_sha256": "d6867cae26f61b3d2cef41dde53266f2f7aed673dae7c3955c4de8752d605f77",
+    "original_frames": 220,
+    "selected_frames": 37,
+    "selection": "native KeyframeSelection regular; minFrameStep1,maxFrameStep0,maxNbOutFrames40,renameKeyframesfalse",
+    "manifest_sha256": "6c84267d24a42b29a2b2f24498cb126225b57a6ce34428dc7a188498d7ccd690",
+    "timestamps": "not inferred from nominal fps"
+  },
+  "cases": {
+    "standard": {
+      "registered": 37,
+      "total": 37,
+      "registered_fraction": 1.0,
+      "dense": {
+        "point_count": 121291,
+        "finite_point_count": 121291,
+        "nonfinite_point_count": 0,
+        "bbox_min": [
+          -0.898534,
+          -1.15712,
+          1.22508
+        ],
+        "bbox_max": [
+          0.860895,
+          0.801606,
+          1.79518
+        ],
+        "extent": [
+          1.759429,
+          1.958726,
+          0.5701
+        ],
+        "coordinate_frame": "native PLY; cloud lineage is recorded by the native graph"
+      },
+      "scale": {
+        "mode": "unknown",
+        "applied": false,
+        "units": "unknown",
+        "transform": {
+          "scale": 1.0,
+          "rotation": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "translation": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "reason": "no measured physical scale"
+      },
+      "cctag_markers": [],
+      "cctag_detection": "not enabled in this DSPSIFT capture",
+      "quality": {
+        "FeatureExtraction": {
+          "describerTypes": [
+            "dspsift"
+          ],
+          "describerPreset": "normal",
+          "describerQuality": "normal",
+          "maxThreads": 8
+        },
+        "ImageMatching": {
+          "method": "Exhaustive"
+        },
+        "DepthMap": {
+          "downscale": 2,
+          "maxTCams": 10
+        },
+        "DepthMapFilter": {
+          "minNumOfConsistentCams": 3,
+          "nNearestCams": 10
+        },
+        "Meshing": {
+          "maxInputPoints": 10000000,
+          "maxPoints": 1000000
+        }
+      },
+      "native_chunk_seconds": 604.8060462474823,
+      "timing_scope": "sum of native chunks; excludes transfers/setup/QA/manual whole-scene adapter",
+      "pds_adapter_calls": 0,
+      "dense_images": {
+        "count": 37,
+        "all_readable": true,
+        "qa_hashes_unchanged_after_compute": true
+      },
+      "artifacts": {
+        "cloud": {
+          "bundle_path": "run/standard/dense.ply",
+          "sha256": "5f517556d87ccbc70459fe97a770fb199b6dec601deff5be601bd7b25538de2b"
+        },
+        "scene": {
+          "bundle_path": "run/standard/scene.json",
+          "sha256": "fac5dfbbd6eed9dc198b215ee861fbbe4a25ff2ec5aade404beb9d9f12d2c64d"
+        },
+        "project": "run/standard/project.mg",
+        "settings": "run/standard/effective-settings.json",
+        "capture_manifest": "run/frame-manifest.json"
+      }
+    },
+    "legacy": {
+      "registered": 37,
+      "total": 37,
+      "registered_fraction": 1.0,
+      "dense": {
+        "point_count": 121513,
+        "finite_point_count": 121513,
+        "nonfinite_point_count": 0,
+        "bbox_min": [
+          -1.40307,
+          -4.08148,
+          1.86254
+        ],
+        "bbox_max": [
+          2.02625,
+          0.0297037,
+          2.46962
+        ],
+        "extent": [
+          3.42932,
+          4.1111837,
+          0.6070799999999998
+        ],
+        "coordinate_frame": "native PLY; cloud lineage is recorded by the native graph"
+      },
+      "scale": {
+        "mode": "unknown",
+        "applied": false,
+        "units": "unknown",
+        "transform": {
+          "scale": 1.0,
+          "rotation": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "translation": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "reason": "no measured physical scale"
+      },
+      "cctag_markers": [],
+      "cctag_detection": "not enabled in this DSPSIFT capture",
+      "quality": {
+        "FeatureExtraction": {
+          "describerTypes": [
+            "dspsift"
+          ],
+          "describerPreset": "normal",
+          "describerQuality": "normal",
+          "maxThreads": 8
+        },
+        "ImageMatching": {
+          "method": "Exhaustive"
+        },
+        "DepthMap": {
+          "downscale": 2,
+          "maxTCams": 10
+        },
+        "DepthMapFilter": {
+          "minNumOfConsistentCams": 3,
+          "nNearestCams": 10
+        },
+        "Meshing": {
+          "maxInputPoints": 10000000,
+          "maxPoints": 1000000
+        }
+      },
+      "native_chunk_seconds": 547.4552180767059,
+      "timing_scope": "sum of native chunks; excludes transfers/setup/QA/manual whole-scene adapter",
+      "pds_adapter_calls": 1,
+      "dense_images": {
+        "count": 37,
+        "all_readable": true,
+        "qa_hashes_unchanged_after_compute": true
+      },
+      "artifacts": {
+        "cloud": {
+          "bundle_path": "run/legacy/dense.ply",
+          "sha256": "b6935de90eb36ddf2af55877f59954152b5f40e0077cb2c8065c7e3fa2a97d3a"
+        },
+        "scene": {
+          "bundle_path": "run/legacy/scene.json",
+          "sha256": "b63334a6f18d01c45e73dcf9d52c010d5b1f0b84cb42a0305c2d690681eb7011"
+        },
+        "project": "run/legacy/project.mg",
+        "settings": "run/legacy/effective-settings.json",
+        "capture_manifest": "run/frame-manifest.json"
+      }
+    }
+  },
+  "decision": {
+    "base_photo_video_pipeline": "standard",
+    "legacy": "retained for CCTag and fallback",
+    "geometry_completeness": "similar visible face/floor coverage and gaps; no demonstrated accuracy advantage",
+    "unverified": [
+      "physical scale and capture accuracy",
+      "hidden back/underside",
+      "generic masks/turntable/two-sides",
+      "new SfM CCTag encoding"
+    ]
+  },
+  "scalar_probe": {
+    "scope": "existing synthetic SfM numerical test; not a measured real capture",
+    "native_method": "transformation",
+    "scale": 208.28703041503752,
+    "rotation": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "translation": [
+      0,
+      0,
+      0
+    ],
+    "marker_ids": [
+      0,
+      1
+    ],
+    "observations_each": [
+      10,
+      10
+    ],
+    "before_distance": 0.4801067056395096,
+    "target_distance": 100.0,
+    "after_distance": 99.99999981184789,
+    "units_convention": "mm in the synthetic test only",
+    "absolute_error": 1.8815211433320655e-07,
+    "numeric_tolerance": 2e-06,
+    "world_vectors": {
+      "structure": {
+        "count": 4989,
+        "max_coordinate_error": 1.525806408153585e-05,
+        "max_fraction_of_serialization_tolerance": 0.2463437428713378
+      },
+      "poses": {
+        "count": 10,
+        "max_coordinate_error": 3.410605131648481e-13,
+        "max_fraction_of_serialization_tolerance": 1.0722674636153221e-05
+      }
+    },
+    "native_graph_io_cli": "passed"
+  },
+  "bundle": {
+    "archive_sha256": "e3f6dba5ac76d221db866ff0b85d2ef6dd73332cd1e57c7403c1426863054c65",
+    "archive_bytes": 1611819183,
+    "uncompressed_bytes": 1830142042,
+    "usd_payload_references": 12,
+    "retention": "owner storage outside Git",
+    "manifest_payload_files": 1102,
+    "verified_archive_entries": 1103,
+    "local_verification": "passed; exact scene/cloud hashes and 12 USDC references retained"
+  },
+  "preview": {
+    "file": "photo-video-comparison.png",
+    "sha256": "c0e9920a61a44bb178f0e5f268284c7ec42f14fd722ea750b138bacd37e86546",
+    "display_only": "proper camera-center Sim3; original PLY files unchanged; uniform native white colors"
+  },
+  "resources": {
+    "deleted": true,
+    "all_pages_absence_verified": true,
+    "deleted_utc": "2026-11-21T19:12:29.340202+00:00",
+    "total_usd": 0.248,
+    "budget_usd": 25,
+    "native_rounding_usd": 0.001
+  },
+  "checks": {
+    "unittest_passed": 25,
+    "linux_process_owner_cases_passed": 3,
+    "linux_resume_checks_passed": 4,
+    "critical_sources_same_logic_as_native": 9,
+    "critical_sources_byte_identical": 7,
+    "two_python_sources_eof_only_change": "compiled code byte-for-byte identical; original native source retained in backup"
+  }
+}

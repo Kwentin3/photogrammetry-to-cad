@@ -35,7 +35,8 @@ def vector(value, length, context):
     return [number(item, context) for item in value]
 
 
-def markers_from_scene(scene, requested, label):
+def scene_reconstructed_views(scene, label):
+    """Validate independent native cameras and return their reconstructed view IDs."""
     pose_ids = set()
     for pose in scene.get("poses", []):
         pose_id = identifier(pose["poseId"], f"{label}.poseId")
@@ -61,30 +62,44 @@ def markers_from_scene(scene, requested, label):
                 and identifier(view["poseId"], f"{label}.view.poseId") in pose_ids
                 and identifier(view["intrinsicId"], f"{label}.view.intrinsicId") in intrinsic_ids):
             reconstructed_views.add(view_id)
-    if len(reconstructed_views) < 2:
-        raise ValueError(f"{label} needs at least two reconstructed views; export views, poses and intrinsics")
-    found = {}
+    return reconstructed_views
+
+
+def cctag_landmarks(scene, reconstructed_views, label, requested=None):
+    """Read native CCTag3 IDs/observations without assuming marker uniqueness."""
+    found = []
     for landmark in scene.get("structure", []):
         if landmark.get("descType") != "cctag3":
             continue
         color = vector(landmark["color"], 3, f"{label}.landmark.color")
         marker_id = identifier(color[0], f"{label}.markerId")
-        if marker_id not in requested:
+        if requested is not None and marker_id not in requested:
             continue
-        if marker_id in found:
-            raise ValueError(f"Duplicate cctag3 marker ID {marker_id} in {label}")
         center = vector(landmark["X"], 3, f"{label}.marker {marker_id}.X")
         observation_ids = [identifier(item["observationId"], f"{label}.marker {marker_id}.observationId")
                            for item in landmark.get("observations", [])]
         if len(set(observation_ids)) != len(observation_ids):
             raise ValueError(f"Duplicate observation ID on marker {marker_id} in {label}")
         posed = sorted(set(observation_ids) & reconstructed_views)
-        if len(posed) < 2:
-            raise ValueError(f"Marker {marker_id} in {label} has only {len(posed)} distinct reconstructed observations")
-        found[marker_id] = {"id": marker_id,
+        found.append({"id": marker_id,
                             "landmark_id": identifier(landmark["landmarkId"], f"{label}.landmarkId"),
                             "center": center, "observation_count": len(observation_ids),
-                            "reconstructed_view_count": len(posed), "reconstructed_view_ids": posed}
+                            "reconstructed_view_count": len(posed), "reconstructed_view_ids": posed})
+    return found
+
+
+def markers_from_scene(scene, requested, label):
+    reconstructed_views = scene_reconstructed_views(scene, label)
+    if len(reconstructed_views) < 2:
+        raise ValueError(f"{label} needs at least two reconstructed views; export views, poses and intrinsics")
+    found = {}
+    for marker in cctag_landmarks(scene, reconstructed_views, label, requested):
+        marker_id = marker["id"]
+        if marker_id in found:
+            raise ValueError(f"Duplicate cctag3 marker ID {marker_id} in {label}")
+        if marker["reconstructed_view_count"] < 2:
+            raise ValueError(f"Marker {marker_id} in {label} has only {marker['reconstructed_view_count']} distinct reconstructed observations")
+        found[marker_id] = marker
     missing = sorted(set(requested) - found.keys())
     if missing:
         raise ValueError(f"Missing cctag3 marker IDs in {label}: {missing}")
