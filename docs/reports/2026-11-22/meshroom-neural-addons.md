@@ -12,16 +12,21 @@ Harness и результаты #8 изучены по [снимку f5b7984][ha
 
 | Задача | Первое решение | Резерв и условие перехода |
 |---|---|---|
-| Автомаски по тексту | **A: native mrSegmentation, RAM++ → GroundingDINO → SAM1**, отдельное окружение/граф | **B: SAM2.1-small + локальный HF GroundingDINO-tiny → PNG**, если native зависимости/ABI/VRAM или подготовка не проходят короткий smoke без изменения ядра |
-| Нейросопоставление | **Native mrRomatch + совместимый авторский fork RoMaV2**, пока кандидат для квалификации | LightGlue: только при конкретном недостатке native пути; готового Meshroom bridge не найдено |
+| Автомаски по тексту | **B: SAM2.1-small + локальный HF GroundingDINO-tiny → PNG**, отдельное ML-окружение и штатный вход masksFolder | **A: native mrSegmentation, RAM++ → GroundingDINO → SAM1**, если на конкретном материале обнаружится ограничение B или потребуется встроенный producer-граф |
+| Нейросопоставление | **В резерве: native mrRomatch + совместимый авторский fork RoMaV2**, после подтверждённой проблемы DSPSIFT на реальной съёмке | LightGlue: только при конкретном недостатке native пути; готового Meshroom bridge не найдено |
 | Базовая съёмка | Прежние Standard/Legacy + DSPSIFT | Ничего не устанавливать ради наличия опции |
 
-Сначала проверить **маски A на обычной неподвижной сцене**. Плагин уже владеет
-выбором объекта, форматами и связями с Meshroom; собственный inference-wrapper
-не нужен. B заметно меньше по весам, но требует нашего batch/output адаптера.
-SAM3 сейчас не выбираем: есть конкретные ABI/установочные ограничения.
-Для матчинга выбираем native архитектуру, но **не объявляем её готовой**:
-нужны согласованные pins/API и уточнение лицензирования, затем отдельный smoke.
+После [внешнего ревью][review-priority] первым выбираем **B на обычной неподвижной
+сцене**. Отдельный генератор PNG использует предусмотренный вход Meshroom и не
+зависит от pyalicevision в ML-окружении. Тонкий batch/output адаптер оправдан этой
+границей: модели можно заменить без пересборки Meshroom. Веса B занимают меньше
+места; преимущество по VRAM, времени и качеству масок ещё предстоит измерить.
+Native A остаётся резервом; фактура обоих путей ниже сохранена.
+SAM3 сейчас не выбираем: есть конкретные ABI/установочные ограничения. Meshroom
+под другой Python ради масок не пересобираем; будущая внешняя модель использует
+своё окружение и тот же PNG-контракт. Для RoMa сохраняем native архитектуру в
+резерве, **не объявляя её готовой**: нужны реальная проблема DSPSIFT, согласованные
+pins/API и уточнение лицензирования, затем отдельный smoke.
 
 Маски не добавляют текстуру металлу, а neural matching не создаёт достоверных
 соответствий на невидимой, совершенно однотонной или отражающей поверхности.
@@ -62,6 +67,14 @@ torchvision≥0.20.1; optional CUDA postprocessing имеет описанный
 Исходный demo не является готовым Meshroom batch-exporter: ещё нужны цикл по
 manifest, вывод lossless PNG, восстановление исходной геометрии и binding файлов.
 [SAM2][sam2], [Grounded-SAM2 HF demo][gsam].
+
+HF-путь убирает зависимость от `groundingdino-py`, однако SAM2 по умолчанию
+пытается собрать собственное CUDA-расширение. Штатный `SAM2_BUILD_CUDA=0`
+позволяет его отключить; тогда пропускается удаление мелких дыр и пятен в маске.
+Выбор фиксировать в настройках и проверять на preview, особенно для тонких
+элементов и отверстий. Это описано в [инструкции SAM2][sam2-install]. Общий вход
+масок есть у Standard и Legacy; успешный ML-прогон и полезность для обоих графов
+пока не подтверждены.
 
 **SAM3 отдельно.** Его descriptor уже есть в mrSegmentation, но старые INSTALL/
 requirements его не устанавливают. SAM3 требует Python≥3.12, torch≥2.7/CUDA≥12.6;
@@ -198,15 +211,20 @@ tokenizer, torch/CUDA зависимости на несколько GB, уст�
 
 ## Минимальная агентная упаковка — предложение
 
-Ядро и base bootstrap не меняются. Native [plugin-folder/venv][plugins] уже
-изолирует Python-node subprocess; pins и `MESHROOM_PLUGINS_PATH` включаются
-только в выбранном запуске. `requirements` metadata — описание, не проверка GPU.
-Provider наследует PATH/PYTHONPATH/LD_LIBRARY_PATH, поэтому это не sandbox и не
-гарантия ABI: перед inference проверить реальный Python, torch.cuda, pyalicevision
-и пути библиотек. [Pinned env][env], [исполнение node][node].
+Ядро и base bootstrap не меняются. Для B генератор масок запускается в отдельном
+ML-окружении и получает manifest, цель выделения и настройки. Его выход — PNG
+и диагностика; Meshroom принимает готовую папку через существующий контракт.
+Новый registry, общий provider API или планировщик для этого не нужны.
 
-Для первой интеграции масок **новых полей основной схеме не нужно**. Native
-producer-граф выполняется до base prepare, его PNG передаются существующим полям:
+Для резервных A/RoMa native [plugin-folder/venv][plugins] уже изолирует Python-node
+subprocess; pins и `MESHROOM_PLUGINS_PATH` включаются только в выбранном запуске.
+`requirements` metadata — описание, не проверка GPU. Provider наследует
+PATH/PYTHONPATH/LD_LIBRARY_PATH, поэтому это не sandbox и не гарантия ABI: перед
+inference проверить реальный Python, torch.cuda, pyalicevision и пути библиотек.
+[Pinned env][env], [исполнение node][node].
+
+Для первой интеграции масок **новых полей основной схеме не нужно**. Генератор
+B выполняется до base prepare, его PNG передаются существующим полям:
 
 ```json
 {
@@ -220,11 +238,15 @@ producer-граф выполняется до base prepare, его PNG пере�
 ```
 
 Это фрагмент существующего reconstruction config, не отдельный запускаемый файл.
-`features=true` нужен столу; обычной сцене выбирается по задаче. Prompt и пороги
-задаются native attrs `ImageDetectionPrompt_1.prompt/synonyms/thresholdDetection`,
-Box — `extensionOut/keepFilename/maskInvert`, в сохранённом `.mgt` или через
-native `--paramOverrides`. Не добавлять их в Standard, где этих узлов нет.
-Генератор не должен знать имя объекта из исходников.
+`features=true` нужен столу; обычной сцене выбирается по задаче. Для B prompt,
+пороги, модель и pins задаются параметрами отдельного шага и сохраняются вместе
+с его диагностикой; имя объекта не должно быть зашито в исходниках.
+
+Для резервного A остаются native attrs
+`ImageDetectionPrompt_1.prompt/synonyms/thresholdDetection`, Box —
+`extensionOut/keepFilename/maskInvert`, в сохранённом `.mgt` или через native
+`--paramOverrides`. Эти настройки относятся к producer-графу, а не к Standard,
+где таких узлов нет.
 
 Для квалифицированного RoMa-профиля в следующем Goal допустим **один optional
 `template` path** к сохранённому native `.mgt`, существующие `nodes` для его
@@ -241,14 +263,15 @@ pins → реальные masks/matches, preview и измеренные вре�
 
 ## Следующий короткий проверочный Goal
 
-1. **Начать с A, не обеих насадок одновременно.** Взять 12–16 неизменённых кадров
-   реального Objectron cereal_box/batch-1/1 из #6: материал уже сохранён, объект
-   и фон понятны. Оба новых сравнения делают на этом же subset/resolution:
-   DSPSIFT без масок и DSPSIFT с native автомасками. Это тест стыка/отсечения пола,
+1. **Начать с B: SAM2.1-small + HF GroundingDINO-tiny → PNG.** Взять 12–16
+   неизменённых кадров реального Objectron cereal_box/batch-1/1 из #6: материал
+   уже сохранён, объект и фон понятны. Оба новых сравнения делают на этом же
+   subset/resolution: DSPSIFT без масок и DSPSIFT с внешними автомасками через
+   штатный masksFolder. Это тест стыка/отсечения пола,
    не доказательство turntable или низкотекстурного matching (у #6 уже 37/37 камер).
 2. До аренды зафиксировать dependency/model pins и доступы, сохранить артефакты
    владельцу. Большие загрузки aria2/rclone многопоточно, с resume/скоростью/SHA.
-   На GPU сначала **один кадр**: интерпретатор/ABI/CUDA, prompt, PNG и overlay;
+   На GPU сначала **один кадр**: ML-окружение/CUDA, prompt, PNG и overlay;
    затем все маски/диагностика; только после содержательной проверки — SfM/MVS.
 3. Сравнить камеры и требуемый участок, leakage фона, края/пропуски mesh,
    ручные поправки. Записать отдельно setup/inference/SfM/MVS, peak RAM/VRAM,
@@ -257,8 +280,8 @@ pins → реальные masks/matches, preview и измеренные вре�
    например ставка ≤$0.60/h даёт ≤$1.20 compute. Это не текущая котировка Vast
    и не разрешение на аренду: конкретный offer/все charges и допуск сверить
    отдельно. Прерывать по deadline/ресурсам/невозможности корректной маски, а не
-   расходовать остаток на подбор установок. При native блокере — подготовить B
-   отдельно, не раздувать один прогон обоими путями.
+   расходовать остаток на подбор установок. При конкретном недостатке B отдельно
+   решить, поможет ли A; обе реализации в один пилот не включать.
 5. Turntable/TwoSides проверять позднее на настоящей соответствующей съёмке.
    RoMa начать отдельным 3-view/ограниченным pair smoke, затем 12–20 реальных
    кадров с наблюдаемым срывом DSPSIFT; такой материал ещё нужен. Проверить
@@ -317,3 +340,5 @@ pins → реальные masks/matches, preview и измеренные вре�
 [plugins]: https://github.com/alicevision/Meshroom/blob/b12ea8896e7e95cc9911b4ec39c272914e4da726/INSTALL_PLUGINS.md
 [env]: https://github.com/alicevision/Meshroom/blob/b12ea8896e7e95cc9911b4ec39c272914e4da726/meshroom/core/plugins/env.py
 [node]: https://github.com/alicevision/Meshroom/blob/b12ea8896e7e95cc9911b4ec39c272914e4da726/meshroom/core/desc/node.py
+[review-priority]: https://github.com/Kwentin3/photogrammetry-to-cad/pull/11#issuecomment-7077543016
+[sam2-install]: https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794ad901a4/INSTALL.md
