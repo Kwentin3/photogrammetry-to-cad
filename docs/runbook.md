@@ -90,21 +90,20 @@ if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pin.a
 ```
 
 До create сверить карточку, незавершённые процессы/аренды и все страницы native
-`show instances-v1 --limit 25 --raw` (`--next-token` при наличии). Проверить полную
-стоимость оффера, выделенные RAM/CPU, CUDA ≥12.8, драйвер ≥570.26, linux/amd64.
-Пример поиска, не универсальный минимум:
-
-```powershell
-& $vastai search offers 'gpu_name=RTX_3090 num_gpus=1 cpu_arch=amd64 verified=true rentable=true direct_port_count>=1 cpu_ram>=32 disk_space>=60 cuda_vers>=12.8 dph_total<=0.60' --storage 60 --type on-demand -o dph_total --limit 5 --raw
-```
-
-При важной скорости доставки можно добавить к native query, например,
-`inet_down>=200`; порог выбирается под размер файлов и срок. Это заявленная
-характеристика оффера, не измерение канала Windows → GPU и не доказательство
-причины долгого `loading`. Отдельно измерять create → SSH-ready, установку,
-передачу и расчёт по [карточке запуска](../templates/run-record.md).
+`show instances-v1 --all --raw`. Затем выполнить [выбор Vast-ноды](infrastructure.md#выбор-vast-ноды):
+запрос/единицы/сортировка, стоимость всего задания, прошлые машины и отсутствие
+офферов описаны там в одном месте. Для закреплённого runtime нужны CUDA ≥12.8,
+драйвер ≥570.26 и linux/amd64; нужные GPU/VRAM, CPU/RAM, диск и сроки определяет
+задание. Query, предложения, решение и реальные времена — в
+[карточке запуска](../templates/run-record.md).
+При долгом старте применять тот же [порядок ожидания и замены](infrastructure.md#ожидание-старта-и-замена),
+сохраняя исходный deadline и все расходы; отсутствие SSH не доказывает зависание.
 
 ## Создание, deadline и передача
+
+Для `--disk` возьми `$diskGiB` из той же карточки, по которой выполнен поиск
+с `--storage $diskGiB`. При отдельном запуске блока восстанови значение из карточки;
+при изменении объёма повторно проверь цену и доступную ёмкость оффера.
 
 Account key остаётся в защищённом контексте управляющей машины. **До create**
 подготовить LF onstart, который запускает существующий `rental_deadline.sh`
@@ -133,7 +132,7 @@ if ([Text.Encoding]::UTF8.GetByteCount($onstart) -gt 4048) { throw 'Onstart size
 [IO.File]::WriteAllText("$work/onstart.sh",$onstart,[Text.UTF8Encoding]::new($false))
 if ([IO.File]::ReadAllText("$work/onstart.sh",[Text.Encoding]::UTF8) -ne $onstart) { throw 'UTF8 readback' }
 $createdUtc=[DateTimeOffset]::UtcNow.ToString('o')
-& $vastai create instance OFFER_ID --image $pin.image --disk 60 --ssh --direct --cancel-unavail --label photogrammetry-goal6 --onstart "$work/onstart.sh" --raw
+& $vastai create instance OFFER_ID --image $pin.image --disk $diskGiB --ssh --direct --cancel-unavail --label photogrammetry-goal6 --onstart "$work/onstart.sh" --raw
 ```
 
 Заменить OFFER_ID проверенным оффером. Сразу записать полученный instance ID,
