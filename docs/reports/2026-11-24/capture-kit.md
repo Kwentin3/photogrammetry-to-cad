@@ -115,10 +115,23 @@ SHA-256; binary запустился на CPU, затем завершился �
 Сообщение об отсутствии CUDA не установлено причиной этой ошибки. Контейнер
 CI удалён; незавершённого расчёта нет.
 
+Следующий [run 45385763293](https://github.com/Kwentin3/photogrammetry-to-cad/actions/runs/45385763293)
+также завершён с удалением контейнера: малый архив Meshroom 132097741 байт
+содержит приложение без AliceVision. Его локальный index (2830 members) подтвердил
+отсутствие detector и libCCTag. Правильная поставка для native-проверки — **full**;
+наличие нужных файлов проверяется до следующего запуска. Малый архив не
+объявляется рабочим runtime и не меняет принятую базу реконструкции.
+
 Следующий отдельный кандидат детектора — официальный
-[Meshroom nightly 2026-11-24, 596c70d, Linux](https://github.com/alicevision/Meshroom/releases/download/nightly/Meshroom-2026.11.24-596c70d-linux.tar.gz),
-132097741 байт, SHA-256
-`ab43a3add37e22b526f0bd7d7bcd81197c43359e06f69e04030ef8a21d9510a6`.
+[Meshroom nightly 2026-11-24, 596c70d, Linux full](https://github.com/alicevision/Meshroom/releases/download/nightly/Meshroom-2026.11.24-596c70d-linux-full.tar.gz),
+600166523 байта, SHA-256
+`f1f540e2349542446524799c4e368be22afe16bb98b950c0a98c04300c92ff36`.
+Полная копия сохранена вне Git в `photogrammetry-to-cad-work/runtime-archives/`.
+Локально проверены SHA и 12486 записей архива: есть native featureExtraction,
+OCIO и `libCCTag.so.1.0.4`. Средняя скорость 8-поточной выгрузки — 4.0 MiB/s.
+Это проверка состава, не native PASS. Upstream nightly rolling: если файл удалён,
+использовать сохранённую копию с тем же SHA в разрешённом Linux CPU-сеансе;
+не подменять архив другим nightly под старым хэшем.
 Эта идентичность выбрана по первичным release metadata; наличие usable CCTag3
 и соответствие native-выходов проверит фактический следующий CI. До него не
 объявляется ни работоспособность нового binary, ни версия его встроенной
