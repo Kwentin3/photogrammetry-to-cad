@@ -104,13 +104,14 @@ Codex настраивает окружение, обрабатывает мат
 плановые вводные dry-run, не новый бюджет. `$vastai` — существующий CLI из runbook.
 
 ```powershell
-$hard='num_gpus=1 cpu_arch=amd64 rentable=true rented=false verified=true gpu_ram>=24 cpu_ram>=32 cpu_cores_effective>=2 disk_space>=30 cuda_vers>=12.8 driver_version>=570.26.0 direct_port_count>=1 duration>=0.05 dph_total<=0.60'
+$diskGiB = 30 # Пример: фактический объём взять из карточки задания и сохранить для create.
+$hard="num_gpus=1 cpu_arch=amd64 rentable=true rented=false verified=true gpu_ram>=24 cpu_ram>=32 cpu_cores_effective>=2 disk_space>=$diskGiB cuda_vers>=12.8 driver_version>=570.26.0 direct_port_count>=1 duration>=0.05 dph_total<=0.60"
 $preferences='reliability>=0.98 inet_down>=500'
 $query="$hard $preferences"
-& $vastai search offers $query --type on-demand --storage 30 -o 'dph_total,reliability-,inet_down-' --limit 10 --raw
+& $vastai search offers $query --type on-demand --storage $diskGiB -o 'dph_total,reliability-,inet_down-' --limit 10 --raw
 if ($LASTEXITCODE -ne 0) { throw 'Search failed; inspect native error, not an empty market' }
 # Прошлая удачная машина — из private карточки, не фиксированный ID в коде:
-# & $vastai search offers "$query machine_id=$pastMachineId" --type on-demand --storage 30 -o dph_total --limit 10 --raw
+# & $vastai search offers "$query machine_id=$pastMachineId" --type on-demand --storage $diskGiB -o dph_total --limit 10 --raw
 ```
 
 Если массив пуст, сохранить исходный query и показать мешающий фильтр: повторить

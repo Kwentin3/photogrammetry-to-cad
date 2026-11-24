@@ -101,6 +101,10 @@ if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pin.a
 
 ## Создание, deadline и передача
 
+Для `--disk` возьми `$diskGiB` из той же карточки, по которой выполнен поиск
+с `--storage $diskGiB`. При отдельном запуске блока восстанови значение из карточки;
+при изменении объёма повторно проверь цену и доступную ёмкость оффера.
+
 Account key остаётся в защищённом контексте управляющей машины. **До create**
 подготовить LF onstart, который запускает существующий `rental_deadline.sh`
 из native окружения с per-instance ключом. Чтобы уложиться в onstart limit,
@@ -128,7 +132,7 @@ if ([Text.Encoding]::UTF8.GetByteCount($onstart) -gt 4048) { throw 'Onstart size
 [IO.File]::WriteAllText("$work/onstart.sh",$onstart,[Text.UTF8Encoding]::new($false))
 if ([IO.File]::ReadAllText("$work/onstart.sh",[Text.Encoding]::UTF8) -ne $onstart) { throw 'UTF8 readback' }
 $createdUtc=[DateTimeOffset]::UtcNow.ToString('o')
-& $vastai create instance OFFER_ID --image $pin.image --disk 60 --ssh --direct --cancel-unavail --label photogrammetry-goal6 --onstart "$work/onstart.sh" --raw
+& $vastai create instance OFFER_ID --image $pin.image --disk $diskGiB --ssh --direct --cancel-unavail --label photogrammetry-goal6 --onstart "$work/onstart.sh" --raw
 ```
 
 Заменить OFFER_ID проверенным оффером. Сразу записать полученный instance ID,
