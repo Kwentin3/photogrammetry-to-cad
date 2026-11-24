@@ -33,6 +33,18 @@ project/cache и штатный CLI. Принятое видео Goal #6 дал�
 не требуется. Исправленная 2023.3 —
 [историческая точка возврата](https://github.com/Kwentin3/photogrammetry-to-cad/blob/f3173b3fdfe27f7e760b84e23f6845b11a937b65/docs/runbook.md).
 
+## Linux CPU: PDF и пробные кадры до аренды
+
+Для native CCTag preflight открыть [единый CPU-рецепт](capture.md#cpu-проверка-pdf-и-пробных-кадров).
+Он задаёт отдельный `$CAPTURE_PYTHON` из `$WORK/capture-env` с PyMuPDF и native
+`ALICEVISION_ROOT`/`LD_LIBRARY_PATH`; один интерпретатор используется для `--kit`
+и `--images`. Запускать в новом Bash без загрузки Meshroom `env.sh` и без
+`$MESHROOM_PYTHON`. Подготовка GPU ниже к этому маршруту не относится.
+Владелец Linux-сеанса должен подтвердить память, время и адресную остановку;
+принятый public CI ограничен CPU 2 / RAM 4 GiB / 64 процесса / 10 min.
+В него передаётся только публичный комплект PDF; пробные частные фото остаются
+в разрешённой среде обработки. Физическую печать и точность CPU-тест не проверяет.
+
 ## До аренды: файлы, доступ и пределы
 
 Нужны полная постоянная копия runtime, съёмка, место для backup, доступ к Vast/SSH
@@ -170,7 +182,7 @@ export SETTINGS="$WORK/config/standard.json"
 test -f "$SETTINGS"
 ```
 
-После source все Linux Python-команды — только `"$MESHROOM_PYTHON"` (bundled 3.11),
+После source все Python-команды этого GPU-рецепта — только `"$MESHROOM_PYTHON"` (bundled 3.11),
 включая короткие проверки JSON. Системный Ubuntu Python 3.12 получает несовместимые
 frozen модули. Отредактировать копию JSON вне Git: images/input_manifest и masks
 разрешаются относительно файла настроек; pipeline — standard или legacy.

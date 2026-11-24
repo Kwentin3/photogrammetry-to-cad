@@ -82,7 +82,8 @@ def prepare_inputs(args, output):
                 raise ValueError("PDF page count differs from manifest")
             inputs = []
             for page, expected in zip(document, manifest["pages"]):
-                if f"CCTag3 - ID {expected['native_id']}" not in page.get_text():
+                expected_title = f"CCTag3 - ID {expected['native_id']}"
+                if expected_title not in [line.strip() for line in page.get_text().splitlines()]:
                     raise ValueError("PDF printed ID differs from manifest")
                 raster = output / f"page-{expected['page']}.png"
                 pixmap = page.get_pixmap(dpi=args.dpi, alpha=False)

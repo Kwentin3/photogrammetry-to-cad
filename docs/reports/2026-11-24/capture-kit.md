@@ -167,7 +167,7 @@ PyMuPDF 1.26.5 создал четыре PNG 596×842 при 72 dpi из кон�
 3.11+ и optional [requirements-capture-kit.txt](../../../requirements-capture-kit.txt):
 
 ```bash
-python -m venv /tmp/capture-venv
+python3 -m venv /tmp/capture-venv
 /tmp/capture-venv/bin/pip install -r requirements-capture-kit.txt
 /tmp/capture-venv/bin/python scripts/make_capture_kit.py \
   --source-dir /tmp/cctag-source --download-source \
@@ -196,20 +196,21 @@ PDF ID извлекается также из печатной подписи. �
 Метка `native_abi` в JSON описывает формат, а не версию переданного binary;
 его точные байты обозначает отдельный `detector_sha256`.
 
-В подготовленном bounded Linux owner с выбранным официальным Meshroom nightly
-сначала сверить полный SHA-256 архива, указанный выше, распаковать без изменения
-ядер и выполнить для каталога `aliceVision` внутри bundle:
+Для native-проверки выполнить [единый CPU-рецепт](../../capture.md#cpu-проверка-pdf-и-пробных-кадров)
+из корня репозитория, задав абсолютные `$WORK` вне Git и `ALICEVISION_ROOT` на
+каталог `aliceVision` проверенного full bundle. Его SHA указан выше.
+Рецепт создаёт `$WORK/capture-env` с одним pinned PyMuPDF, задаёт явный
+`CAPTURE_PYTHON="$WORK/capture-env/bin/python"`, `ALICEVISION_ROOT` и native
+`LD_LIBRARY_PATH`. Meshroom `env.sh` не загружается, `$MESHROOM_PYTHON` не используется,
+`PYTHONHOME`/`PYTHONPATH` очищаются. Для этой проверки генератор не устанавливается.
+Команды проверки не дублируются: [workflow](../../../.github/workflows/capture-kit.yml)
+извлекает отмеченный Bash-блок из `capture.md` и исполняет его в чистом CPU-контейнере.
 
-```bash
-export ALICEVISION_ROOT=/path/to/extracted/aliceVision
-export LD_LIBRARY_PATH="$ALICEVISION_ROOT/lib:$ALICEVISION_ROOT/lib64:${LD_LIBRARY_PATH:-}"
-export OMP_NUM_THREADS=1
-python scripts/check_capture_kit.py \
-  --kit templates/capture-kit \
-  --detector "$ALICEVISION_ROOT/bin/aliceVision_featureExtraction" \
-  --output /tmp/pdf-check
-cat /tmp/pdf-check/validation.json
-```
+Ранее приведённый здесь голый `python` не выбирал среду с PyMuPDF. После замечания
+[review PR #16, пункт 1](https://github.com/Kwentin3/photogrammetry-to-cad/pull/16#issuecomment-7131614932)
+публикуется этот общий рецепт. Прежние успешные run выше подтверждают прежнюю
+проверку PDF; новая редакция требует своего успешного CI и до него имеет только
+статическую проверку команд.
 
 `--output` должен быть новым каталогом: старые native-файлы не переиспользуются.
 Внутри — `input.sfm`, PNG, `.feat/.desc`, `native.log`, `validation.json`.
@@ -226,15 +227,10 @@ Native timeout 180 секунд, один CPU worker; лимит памяти/в
 установочную базу и независимые расстояния. Положение меток между кадрами одной
 сцены не менять. Инструкция оператору находится в основной памятке Goal #15.
 
-В том же подготовленном Linux owner можно проверить originals без правки кода:
-
-```bash
-python scripts/check_capture_kit.py \
-  --images /path/to/trial-originals \
-  --detector "$ALICEVISION_ROOT/bin/aliceVision_featureExtraction" \
-  --output /tmp/trial-check
-cat /tmp/trial-check/validation.json
-```
+В том же подготовленном Linux owner использовать вариант `--images` из
+[CPU-рецепта](../../capture.md#cpu-проверка-pdf-и-пробных-кадров), с тем же
+`$CAPTURE_PYTHON` и native environment; путь — на исходные пробные кадры,
+`--output` — новый каталог. Приватные оригиналы в public CI не передаются.
 
 В JSON для каждого оригинала будут ID, центры и радиусы. `PREFLIGHT_REVIEW_REQUIRED`
 означает только завершённое чтение native-выходов: агент ещё сопоставляет найденные

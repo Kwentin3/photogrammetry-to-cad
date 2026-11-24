@@ -155,15 +155,15 @@ native PNG/EXR и dense-only Standard cloud/mesh с теми же камерам
 | [photogrammetryObjectTwoSides.mgt][twosides] | Два раздельных набора одного жёсткого объекта до/после переворота с общими различимыми участками поверхности. CameraInit_1 и _2, две сегментации; раздельные SfM, masked признаки для сопоставления сторон, SfMMerge_1.method=from_landmarks, повторная триангуляция | Объединённая сцена → Meshing_3.output/outputMesh. **Нужно mrSegmentation/веса и подходящая съёмка; рецепт без выполнения**. Полностью непересекающиеся стороны не получают достоверной взаимной позиции только из этого шаблона |
 
 Точный native рецепт для двух сторон после установки дополнения, на Linux
-с закреплённым runtime; `$MR` и `$RUN` — пути из runbook, RUN новый:
+с закреплённым runtime; `$MESHROOM_ROOT` и `$RUN` — пути из runbook, RUN новый:
 
 ```bash
-"$MR/meshroom_batch" --pipeline photogrammetryObjectTwoSides \
+"$MESHROOM_ROOT/meshroom_batch" --pipeline photogrammetryObjectTwoSides \
   --input 'CameraInit_1=/data/side-a' 'CameraInit_2=/data/side-b' \
   --output "$RUN/published" --save "$RUN/project.mg" \
   --overrideCacheDir "$RUN/cache" --compute no
 # Проверить состав обеих CameraInit, prompt/маски и nodeType в сохранённом графе.
-"$MR/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode Meshing_3
+"$MESHROOM_ROOT/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode Meshing_3
 ```
 
 Имена выше сверены с pinned шаблоном. Не передавать обе папки без адресации:
@@ -313,9 +313,9 @@ Standard/Legacy шаблонах pins имена — Meshing_1, MeshFiltering_1,
 
 ```bash
 # После подготовки/проверки общего пути, с тем же project.mg и cache:
-"$MR/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode Meshing_1
-"$MR/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode MeshFiltering_1
-"$MR/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode Texturing_1
+"$MESHROOM_ROOT/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode Meshing_1
+"$MESHROOM_ROOT/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode MeshFiltering_1
+"$MESHROOM_ROOT/meshroom_compute" "$RUN/project.mg" --cache "$RUN/cache" --toNode Texturing_1
 ```
 
 Это последовательные альтернативные глубины, а не требование запускать все три.

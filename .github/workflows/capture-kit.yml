@@ -8,7 +8,9 @@ on:
       - 'templates/capture-kit/**'
       - 'scripts/make_capture_kit.py'
       - 'scripts/check_capture_kit.py'
+      - 'tests/test_capture_kit.py'
       - 'requirements-capture-kit.txt'
+      - 'docs/capture.md'
       - '.github/workflows/capture-kit.yml'
   pull_request:
     paths:
@@ -16,7 +18,9 @@ on:
       - 'templates/capture-kit/**'
       - 'scripts/make_capture_kit.py'
       - 'scripts/check_capture_kit.py'
+      - 'tests/test_capture_kit.py'
       - 'requirements-capture-kit.txt'
+      - 'docs/capture.md'
       - '.github/workflows/capture-kit.yml'
 
 permissions:
@@ -45,8 +49,6 @@ jobs:
         run: |
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv ca-certificates aria2 tar libgl1 libglib2.0-0 libgomp1 libxrender1 libsm6 libxext6
-          python3 -m venv /tmp/pdf-env
-          /tmp/pdf-env/bin/pip install --disable-pip-version-check --only-binary=:all: "$(grep -E '^PyMuPDF==[0-9.]+$' requirements-capture-kit.txt)"
       - name: Fetch pinned detector runtime
         shell: bash
         run: |
@@ -56,17 +58,15 @@ jobs:
           mkdir /tmp/alicevision
           tar -xzf /tmp/alicevision.tar.gz --no-same-owner -C /tmp/alicevision
           rm /tmp/alicevision.tar.gz
-      - name: Detect IDs on final PDF pages
+      - name: Run published CPU recipe and printed ID regression
         shell: bash
         run: |
           set -euo pipefail
           detector=$(find /tmp/alicevision -name aliceVision_featureExtraction -print -quit)
           test -n "$detector" && test -x "$detector"
-          native_root=$(dirname "$(dirname "$detector")")
-          export ALICEVISION_ROOT="$native_root"
-          export LD_LIBRARY_PATH="$native_root/lib:$native_root/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          result=0
-          timeout --signal=TERM --kill-after=5s 180s /tmp/pdf-env/bin/python scripts/check_capture_kit.py --kit templates/capture-kit --detector "$detector" --output /tmp/pdf-check || result=$?
-          if test -f /tmp/pdf-check/native.log; then tail -n 80 /tmp/pdf-check/native.log; fi
-          if test -f /tmp/pdf-check/validation.json; then cat /tmp/pdf-check/validation.json; fi
-          exit "$result"
+          export ALICEVISION_ROOT=$(dirname "$(dirname "$detector")")
+          export WORK=/tmp/capture-proof
+          sed -n '/^<!-- capture-cpu-recipe:start -->$/,/^<!-- capture-cpu-recipe:end -->$/{ /^<!--/d; /^```/d; p; }' docs/capture.md >/tmp/capture-cpu.sh
+          test -s /tmp/capture-cpu.sh
+          source /tmp/capture-cpu.sh
+          "$CAPTURE_PYTHON" -m unittest discover -s tests -p test_capture_kit.py
