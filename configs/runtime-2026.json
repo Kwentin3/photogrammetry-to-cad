@@ -4,6 +4,8 @@
   "archive_name": "Meshroom-2026.11.21-b12ea88-linux-full.tar.gz",
   "archive_bytes": 600156630,
   "archive_sha256": "4ca3cfb0898b8000def4e68d513468a199b948329b63cdb6b257e427d295163b",
+  "archive_url": "",
+  "archive_url_note": "Set the owner-approved permanent source in a private copy of this lock or pass its resolved signed URL as RUNTIME_URL; see docs/runbook.md. Public mirroring of this bundle is not qualified (FFmpeg --enable-nonfree).",
   "bundle_directory": "Meshroom-2026.11.21-b12ea88-linux",
   "retained_copy_relative_to_checkout": "../photogrammetry-to-cad-work/runtime-archives/Meshroom-2026.11.21-b12ea88-linux-full.tar.gz",
   "upstream_url": "https://github.com/alicevision/Meshroom/releases/download/nightly/Meshroom-2026.11.21-b12ea88-linux-full.tar.gz",
