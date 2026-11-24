@@ -1,6 +1,7 @@
 """Raster final PDF and check native CCTag3 outputs; this is not a detector.
 
-Requires requirements-capture-kit.txt and official AliceVision 3.3 x86_64.
+Requires requirements-capture-kit.txt and an official AliceVision x86_64
+detector build qualified by an actual CCTag3 extraction, not its generic help.
 Real-photo preflight: replace --kit with --images ORIGINALS (3-5 trial photos).
 Run under the host's resource/process owner. Windows CCTag allocations exceed
 the current 2 GiB Job commit limit; use the bounded Linux CI for the PDF check.
@@ -26,9 +27,11 @@ def sha256(path):
 def read_native_regions(features, descriptors):
     """Read AliceVision x86_64 .feat/.desc (native size_t count + 128 uchar).
 
-    Source: AliceVision v3.3.0 feature/Descriptor.hpp saveDescsToBinFile and
+    Source contract checked in AliceVision v3.3.0 and revision d012d055:
+    feature/Descriptor.hpp saveDescsToBinFile and
     feature/cctag/ImageDescriber_CCTAG.cpp. A native CCTag ID is the sole byte
     index containing 255; all remaining descriptor bytes must be zero.
+    This ABI label does not identify the supplied detector's build version.
     """
     content = descriptors.read_bytes()
     if len(content) < 8:
@@ -140,7 +143,7 @@ def main():
                    "--maxThreads", "1", "--maxCoresAvailable", "1", "--maxMemoryAvailable", "1073741824",
                    "--rangeStart", "0", "--rangeSize", str(len(inputs)), "--verboseLevel", "debug"]
         result.update({"detector_sha256": sha256(detector), "command": command,
-                       "native_abi": "AliceVision 3.3 x86_64 little endian; size_t count + 128 unsigned bytes"})
+                       "native_abi": "AliceVision CCTag x86_64 little endian; size_t count + 128 unsigned bytes"})
         environment = os.environ.copy()
         environment["OMP_NUM_THREADS"] = "1"
         with (output / "native.log").open("w", encoding="utf-8") as log:

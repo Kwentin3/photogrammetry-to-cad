@@ -9,7 +9,8 @@
 
 На 24 ноября цифровая проверка формы и размеров PDF выполнена, просмотрены все
 четыре страницы. **Native-проверка ID окончательного PDF ещё требует evidence
-Linux CI**: локальный Windows CPU-детектор остановлен общим лимитом commit 2 GiB.
+Linux CI**: локальный Windows CPU-детектор остановлен общим лимитом commit 2 GiB,
+а первый Linux prebuilt отклонил `cctag3` до извлечения признаков.
 Это не PASS детекции. Физическая распечатка, рабочая дистанция, новая съёмка и
 метрическая точность пока не проверены. После native CI сюда добавляется
 идентичность проверенного commit/run и результат для каждого ID.
@@ -104,6 +105,26 @@ asset ID `284032862`, размер 1549136674 байта. Выборочно и�
 не осталось. WSL с зарегистрированной Ubuntu не запустился: «Указанное сетевое
 имя более недоступно»; его ремонт и запуск других сред не выполнялись.
 
+## Первый Linux CI и следующий проверяемый кандидат
+
+[CI run 45384802537](https://github.com/Kwentin3/photogrammetry-to-cad/actions/runs/45384802537)
+завершился failure. Полный официальный архив AliceVision 3.3.0 Linux прошёл
+SHA-256; binary запустился на CPU, затем завершился с
+`Invalid imageDescriber : cctag3` до extraction. Generic help с именем `cctag3`
+не подтверждает, что именно эта сборка умеет создавать данный describer.
+Сообщение об отсутствии CUDA не установлено причиной этой ошибки. Контейнер
+CI удалён; незавершённого расчёта нет.
+
+Следующий отдельный кандидат детектора — официальный
+[Meshroom nightly 2026-11-24, 596c70d, Linux](https://github.com/alicevision/Meshroom/releases/download/nightly/Meshroom-2026.11.24-596c70d-linux.tar.gz),
+132097741 байт, SHA-256
+`ab43a3add37e22b526f0bd7d7bcd81197c43359e06f69e04030ef8a21d9510a6`.
+Эта идентичность выбрана по первичным release metadata; наличие usable CCTag3
+и соответствие native-выходов проверит фактический следующий CI. До него не
+объявляется ни работоспособность нового binary, ни версия его встроенной
+AliceVision по номеру старого release. Основной закреплённый runtime
+реконструкции от 21 ноября этим выбором не меняется.
+
 ## Воспроизведение PDF и native-проверки
 
 Готовый PDF не требует установленного генератора. Для пересоздания нужны Python
@@ -125,17 +146,23 @@ python -m venv /tmp/capture-venv
 готовый PDF, создаёт минимальный native `.sfm`, запускает штатный детектор и
 читает его результаты. Формат `.desc` подтверждён официальными
 [Descriptor.hpp](https://github.com/alicevision/AliceVision/blob/v3.3.0/src/aliceVision/feature/Descriptor.hpp)
-и [ImageDescriber_CCTAG.cpp](https://github.com/alicevision/AliceVision/blob/v3.3.0/src/aliceVision/feature/cctag/ImageDescriber_CCTAG.cpp):
+и [ImageDescriber_CCTAG.cpp](https://github.com/alicevision/AliceVision/blob/v3.3.0/src/aliceVision/feature/cctag/ImageDescriber_CCTAG.cpp).
+Тот же формат независимо сверен в принятом source revision d012d055:
+[Descriptor.hpp](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/aliceVision/feature/Descriptor.hpp),
+[ImageDescriber_CCTAG.cpp](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/aliceVision/feature/cctag/ImageDescriber_CCTAG.cpp).
+Это контракт хранения:
 64-битный little-endian `size_t` count и 128 байтов на descriptor, один byte 255
 на позиции нативного ID. Драйвер проверяет длину, число `.feat`, единственный
 ожидаемый ID страницы, его положение до 2 пикселей, SHA PDF/manifest/растра/выходов.
 PDF ID извлекается также из печатной подписи. Это чтение native-формата, не
 реализация детектора.
 
-В подготовленном bounded Linux owner с официальным архивом AliceVision 3.3.0
-сначала сверить полный SHA-256
-`f43f498312859af627f2f7f65a6d33c2a3411b37989b8b680c04c8c690dcb640`,
-распаковать без изменения ядер и выполнить:
+Метка `native_abi` в JSON описывает формат, а не версию переданного binary;
+его точные байты обозначает отдельный `detector_sha256`.
+
+В подготовленном bounded Linux owner с выбранным официальным Meshroom nightly
+сначала сверить полный SHA-256 архива, указанный выше, распаковать без изменения
+ядер и выполнить для каталога `aliceVision` внутри bundle:
 
 ```bash
 export ALICEVISION_ROOT=/path/to/extracted/aliceVision

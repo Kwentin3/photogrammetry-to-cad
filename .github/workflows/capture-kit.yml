@@ -36,6 +36,8 @@ jobs:
     env:
       OMP_NUM_THREADS: '2'
       OPENBLAS_NUM_THREADS: '2'
+      CAPTURE_DETECTOR_URL: https://github.com/alicevision/Meshroom/releases/download/nightly/Meshroom-2026.11.24-596c70d-linux.tar.gz
+      CAPTURE_DETECTOR_SHA256: ab43a3add37e22b526f0bd7d7bcd81197c43359e06f69e04030ef8a21d9510a6
     steps:
       - name: Check out candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -49,8 +51,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          timeout --signal=TERM --kill-after=5s 180s aria2c --split=8 --max-connection-per-server=8 --min-split-size=8M --file-allocation=none --continue=true --max-tries=2 --timeout=15 --summary-interval=10 --checksum=sha-256=f43f498312859af627f2f7f65a6d33c2a3411b37989b8b680c04c8c690dcb640 --dir=/tmp --out=alicevision.tar.gz https://github.com/alicevision/AliceVision/releases/download/v3.3.0/AliceVision-3.3.0-Linux.tar.gz
-          echo 'f43f498312859af627f2f7f65a6d33c2a3411b37989b8b680c04c8c690dcb640  /tmp/alicevision.tar.gz' | sha256sum --check
+          timeout --signal=TERM --kill-after=5s 180s aria2c --split=8 --max-connection-per-server=8 --min-split-size=8M --file-allocation=none --continue=true --max-tries=2 --timeout=15 --summary-interval=10 --checksum="sha-256=$CAPTURE_DETECTOR_SHA256" --dir=/tmp --out=alicevision.tar.gz "$CAPTURE_DETECTOR_URL"
+          echo "$CAPTURE_DETECTOR_SHA256  /tmp/alicevision.tar.gz" | sha256sum --check
           mkdir /tmp/alicevision
           tar -xzf /tmp/alicevision.tar.gz --no-same-owner -C /tmp/alicevision
           rm /tmp/alicevision.tar.gz
