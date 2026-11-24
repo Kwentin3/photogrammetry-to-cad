@@ -82,6 +82,13 @@ HF detector использует штатный PyTorch с отключённы�
 с сохранёнными boxes, а не первую находку/белую маску. Пороги задаются явно;
 доступны `cpu`, `cuda`, `cuda:N`. CPU не квалифицирован по скорости.
 
+Площадь каждой выбранной SAM-маски записывается до объединения в
+`frames[].segments`: `candidate_index` (индекс с нуля в `candidates` этого кадра),
+`keep_pixels`, `keep_fraction`, `zero`, `full` и SAM score. Пустая или полная
+маска любого выбранного экземпляра означает ошибку кадра даже при непустом
+общем `union`. Частичный PNG и previews сохраняются для разбора, run получает
+`status=error` и не публикует успешный контракт `mask_inputs`.
+
 ```bash
 export MASK_SETTINGS="$WORK/config/auto-masks.json" MASK_RUN="$WORK/masks/run-01"
 "$AUTO_MASK_PYTHON" "$REPO/scripts/generate_masks.py" --settings "$MASK_SETTINGS" --validate-only
