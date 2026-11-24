@@ -9,7 +9,9 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import tempfile
+from types import SimpleNamespace
 import unittest
 
 
@@ -89,7 +91,7 @@ class DeliveredKitTests(unittest.TestCase):
         with fitz.open(kit / "cctag3-print.pdf") as document:
             self.assertEqual(len(document), 4)
             for page, expected in zip(document, manifest["pages"]):
-                self.assertIn(f"CCTag3 - ID {expected['native_id']}", page.get_text())
+                self.assertIn(f"CCTag3 - ID {expected['native_id']}", page.get_text().splitlines())
                 self.assertAlmostEqual(page.rect.width / 72 * 25.4, 210, places=3)
                 self.assertAlmostEqual(page.rect.height / 72 * 25.4, 297, places=3)
                 circles = [path["rect"] for path in page.get_drawings()
@@ -97,6 +99,41 @@ class DeliveredKitTests(unittest.TestCase):
                 outer = max(circles, key=lambda rect: rect.width)
                 self.assertAlmostEqual(outer.width / 72 * 25.4, 100, places=3)
                 self.assertAlmostEqual(outer.height / 72 * 25.4, 100, places=3)
+
+    @unittest.skipUnless(importlib.util.find_spec("fitz"), "Optional PDF checks require requirements-capture-kit.txt")
+    def test_rejects_id_10_header_when_manifest_and_rings_have_id_1(self):
+        import fitz
+
+        original = ROOT / "templates/capture-kit"
+        with tempfile.TemporaryDirectory(prefix="cctag-printed-id-") as temporary:
+            root = Path(temporary)
+            kit = root / "kit"
+            kit.mkdir()
+            shutil.copyfile(original / "measurements.csv", kit / "measurements.csv")
+            with fitz.open(original / "cctag3-print.pdf") as document:
+                page = document[1]
+                title = page.search_for("CCTag3 - ID 1")[0]
+                page.add_redact_annot(title, fill=(1, 1, 1))
+                page.apply_redactions()
+                page.insert_text((title.x0, title.y1 - 4), "CCTag3 - ID 10", fontsize=20)
+                self.assertIn("CCTag3 - ID 10", page.get_text().splitlines())
+                self.assertNotIn("CCTag3 - ID 1", page.get_text().splitlines())
+                document.save(kit / "cctag3-print.pdf")
+            manifest = json.loads((original / "manifest.json").read_text(encoding="utf-8"))
+            manifest["pdf_sha256"] = checker.sha256(kit / "cctag3-print.pdf")
+            (kit / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            rejected_output = root / "rejected"
+            rejected_output.mkdir()
+            with self.assertRaisesRegex(ValueError, "PDF printed ID"):
+                checker.prepare_inputs(SimpleNamespace(kit=kit, images=None, dpi=72), rejected_output)
+
+            accepted_output = root / "accepted"
+            accepted_output.mkdir()
+            source, inputs, scene = checker.prepare_inputs(
+                SimpleNamespace(kit=original, images=None, dpi=72), accepted_output)
+            self.assertEqual(source["pdf_sha256"], checker.sha256(original / "cctag3-print.pdf"))
+            self.assertEqual([item["expected_id"] for item in inputs], [0, 1, 2, 3])
+            self.assertTrue(scene.is_file())
 
 
 if __name__ == "__main__":

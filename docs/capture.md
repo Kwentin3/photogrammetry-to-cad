@@ -73,14 +73,60 @@ python3 -m venv "$WORK/capture-env"
 установки svglib/pycairo могут понадобиться libcairo2-dev, pkg-config и Python
 headers; готовый PDF требует только PyMuPDF для растра и native detector.
 
-В подготовленном **Linux CPU-сеансе** по [runbook](runbook.md), под его
-ограничителем времени/памяти, с заданным `ALICEVISION_ROOT` и путями библиотек:
+### CPU-проверка PDF и пробных кадров
+
+Нужен отдельный разрешённый Linux x86_64 CPU-сеанс: Bash, Python 3.11+ с venv,
+coreutils и системные библиотеки `libgl1 libglib2.0-0 libgomp1 libxrender1 libsm6
+libxext6`. Запускать из корня репозитория в новом shell **без** `source
+Meshroom/env.sh`; `$MESHROOM_PYTHON` здесь не используется. Driver имеет свой
+Python с PyMuPDF, native detector получает только `ALICEVISION_ROOT` и библиотеки.
+Распаковать полный квалифицированный архив, проверив его SHA по
+[отчёту](reports/2026-11-24/capture-kit.md#выбор-рабочего-linux-детектора), и задать:
 
 ```bash
-python scripts/check_capture_kit.py --kit "$WORK/capture-kit-02" \
+export WORK=/absolute/path/to/capture-work
+export ALICEVISION_ROOT=/absolute/path/to/extracted/aliceVision
+```
+
+До запуска подтвердить владельца и ограничения дерева: в [CI](../.github/workflows/capture-kit.yml)
+это CPU 2 / RAM 4 GiB / 64 процесса / job 10 min, native timeout 180 s.
+Следующий блок — общий рецепт: CI исполняет его прямо из этого документа.
+
+<!-- capture-cpu-recipe:start -->
+```bash
+set -euo pipefail
+: "${WORK:?Set an absolute working directory outside Git}"
+: "${ALICEVISION_ROOT:?Set the extracted native aliceVision directory}"
+test -x "$ALICEVISION_ROOT/bin/aliceVision_featureExtraction"
+unset PYTHONHOME PYTHONPATH LD_LIBRARY_PATH
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+python3 -m venv "$WORK/capture-env"
+CAPTURE_PYTHON="$WORK/capture-env/bin/python"
+"$CAPTURE_PYTHON" -m pip install --disable-pip-version-check --only-binary=:all: \
+  "$(grep -E '^PyMuPDF==[0-9.]+$' requirements-capture-kit.txt)"
+export ALICEVISION_ROOT
+export LD_LIBRARY_PATH="$ALICEVISION_ROOT/lib:$ALICEVISION_ROOT/lib64"
+result=0
+timeout --signal=TERM --kill-after=5s 180s \
+  "$CAPTURE_PYTHON" scripts/check_capture_kit.py --kit templates/capture-kit \
   --detector "$ALICEVISION_ROOT/bin/aliceVision_featureExtraction" \
-  --output "$WORK/pdf-check-02"
-cat "$WORK/pdf-check-02/validation.json"
+  --output "$WORK/pdf-check" || result=$?
+if test -f "$WORK/pdf-check/native.log"; then tail -n 80 "$WORK/pdf-check/native.log"; fi
+if test -f "$WORK/pdf-check/validation.json"; then cat "$WORK/pdf-check/validation.json"; fi
+test "$result" -eq 0
+```
+<!-- capture-cpu-recipe:end -->
+
+Для нового комплекта из примера выше заменить только `--kit templates/capture-kit`
+на `--kit "$WORK/capture-kit-02"` и выбрать новый output. После подготовки в том
+же shell проверка пробных оригиналов использует **тот же** Python и native env:
+
+```bash
+timeout --signal=TERM --kill-after=5s 180s \
+  "$CAPTURE_PYTHON" scripts/check_capture_kit.py --images "$WORK/trial-originals" \
+  --detector "$ALICEVISION_ROOT/bin/aliceVision_featureExtraction" \
+  --output "$WORK/trial-check-01"
+cat "$WORK/trial-check-01/validation.json"
 ```
 
 Output — новый каталог. Driver проверяет SHA PDF/формы, растеризует именно этот
@@ -102,14 +148,9 @@ PDF и сравнивает native ID/центры с подписями. Изм
 ID на этих файлах по процедуре печатного комплекта. Это короткая CPU-детекция,
 не полный SfM/MVS. Сохранить имена кадров, найденные ID и параметры.
 
-В том же подготовленном Linux CPU-сеансе, с установленным PyMuPDF:
-
-```bash
-python scripts/check_capture_kit.py --images "$WORK/trial-originals" \
-  --detector "$ALICEVISION_ROOT/bin/aliceVision_featureExtraction" \
-  --output "$WORK/trial-check-01"
-cat "$WORK/trial-check-01/validation.json"
-```
+Использовать `--images` из [CPU-рецепта выше](#cpu-проверка-pdf-и-пробных-кадров):
+там явно выбраны `$CAPTURE_PYTHON`, PyMuPDF и native-библиотеки, GPU-подготовка
+из runbook для этой пробы не требуется.
 
 `PREFLIGHT_REVIEW_REQUIRED` означает, что агент ещё должен сверить найденные ID
 с нужными метками на оригиналах, резкость, размер и видимость масштабной пары.
