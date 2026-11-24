@@ -6,3 +6,7 @@ examples/goal-2/** -text whitespace=cr-at-eol
 examples/goal-2/**/*.step binary
 examples/goal-4/** -text whitespace=cr-at-eol
 examples/goal-4/**/*.step binary
+# Printable-kit hashes must survive Windows/Linux checkout unchanged.
+/templates/capture-kit/*.pdf binary
+/templates/capture-kit/*.csv text eol=lf
+/templates/capture-kit/*.json text eol=lf

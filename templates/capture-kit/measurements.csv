@@ -1,0 +1,14 @@
+measurement_id,purpose,from_point,to_point,measured_mm,uncertainty_mm,method,notes
+print_page_1_x,print_check,page_1_x_tick_start,page_1_x_tick_end,,,,Nominal 100 mm; check printed sheet before mounting
+print_page_1_y,print_check,page_1_y_tick_start,page_1_y_tick_end,,,,Nominal 100 mm; check printed sheet before mounting
+print_page_2_x,print_check,page_2_x_tick_start,page_2_x_tick_end,,,,Nominal 100 mm; check printed sheet before mounting
+print_page_2_y,print_check,page_2_y_tick_start,page_2_y_tick_end,,,,Nominal 100 mm; check printed sheet before mounting
+print_page_3_x,print_check,page_3_x_tick_start,page_3_x_tick_end,,,,Nominal 100 mm; check printed sheet before mounting
+print_page_3_y,print_check,page_3_y_tick_start,page_3_y_tick_end,,,,Nominal 100 mm; check printed sheet before mounting
+print_page_4_x,print_check,page_4_x_tick_start,page_4_x_tick_end,,,,Nominal 100 mm; check printed sheet before mounting
+print_page_4_y,print_check,page_4_y_tick_start,page_4_y_tick_end,,,,Nominal 100 mm; check printed sheet before mounting
+scale_baseline,scale,cctag3:0:center,cctag3:1:center,,,,Measure gray centres in place; this pair defines scale only
+marker_check_0_2,check,cctag3:0:center,cctag3:2:center,,,,Independent marker check; do not use to fit scale
+marker_check_1_3,check,cctag3:1:center,cctag3:3:center,,,,Independent marker check; do not use to fit scale
+object_check_1,check,REPLACE_object_1_start,REPLACE_object_1_end,,,,Describe and photograph both endpoints; do not fit scale
+object_check_2,check,REPLACE_object_2_start,REPLACE_object_2_end,,,,Describe and photograph both endpoints; do not fit scale
