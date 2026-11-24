@@ -117,7 +117,7 @@ Rclone 1.76.0, SFTP с trusted known_hosts, cutoff16M/chunk4M, прямые nati
 |---|---|
 | Первый copy | 33554461 B, native DEBUG подтвердил восемь потоков большого файла; оба whole-file SHA совпали. |
 | Завершённый повтор | Native stats: 0 transferred bytes/0 transfers, оба файла unchanged/skipped. SHA проверен независимо. |
-| Прерывание | Native `--max-duration 20s` не завершил клиент за внешний предел 35 с; адресно остановлен именно его PID. Remote holders отсутствовали до повтора. Stats 16384000 B; `.partial` имел logical size32MiB, но неправильный SHA. Размер не означал успех. |
+| Прерывание | Native `--max-duration 20s` не завершил клиент за внешний предел 35 с; адресно остановлен именно его PID. Remote holders проверены до повтора. Native stats зафиксировали 16384000 B из32MiB; частичный файл не принят как готовый. |
 | Первый retry | Восемь потоков одновременно с backup download: exit5, SSH handshake EOF при записи chunk, 34.905 с. Причина на уровне сервера не доказана. |
 | Итоговый retry | После окончания другой передачи, четыре потока, полная повторная отправка 33554432 B; exit0, **117.436 с**, SHA совпал, remote holders=[] после завершения. |
 
@@ -177,8 +177,11 @@ Ledger после удаления: первая попытка **$0.013** (ди
 78 локальных unittest — OK, два пропуска необязательных PDF-проверок из-за
 отсутствия fitz. Проверены UTF-8, 161 локальная ссылка, native config/reader,
 15 Bash-блоков и AST 12 PowerShell-блоков runbook; исполняемый runtime-блок
-совпадает с проверенным на GPU commit. Финальная независимая сверка кандидата
-фиксируется в Goal. CI для незатронутых capture/PDF не подменяет эту приёмку.
+совпадает с проверенным на GPU commit. Независимая приёмка кандидата `23282442`
+и уточнения отчёта — **PASS** по всем критериям #19: ревьюер заново пересчитал
+backup и все payload SHA, сверил реальные `.feat`/native log/source paths,
+runtime/SFTP переходы, удаление и ledger. Private review сохранён вне Git.
+CI для незатронутых capture/PDF не запускался и не подменяет эту приёмку.
 Новых product downloader/transfer API, patch ядра или отдельного оркестратора нет.
 
 Следующий агент берёт workflow skill, runbook, runtime lock и новую внешнюю
