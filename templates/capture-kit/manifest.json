@@ -1,0 +1,90 @@
+{
+  "family": "cctag3",
+  "native_ids": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "paper": "A4",
+  "page_size_mm": [
+    210.0,
+    297.0
+  ],
+  "outer_diameter_mm": 100,
+  "source_revision": "71021443af3f7946e8e9025a37634b57e7aad77d",
+  "source_base": "https://raw.githubusercontent.com/alicevision/CCTag/71021443af3f7946e8e9025a37634b57e7aad77d/markersToPrint/generators/",
+  "source_sha256": {
+    "generate.py": "93bbc70c469885fda1be54d55f84d944a4885c21cddf96bccd524c207b93365f",
+    "cctag3.txt": "f68d0d7b68b080dd3e7a507a47e59fe4807649af6818226a6d9ee32912d3181a"
+  },
+  "generator_arguments": [
+    "--rings",
+    "3",
+    "--radius",
+    "500",
+    "--margin",
+    "400",
+    "--addCross",
+    "--whiteBackground"
+  ],
+  "pages": [
+    {
+      "page": 1,
+      "native_id": 0,
+      "center_mm_from_bottom_left": [
+        105.0,
+        158.5
+      ],
+      "center_mm_from_top_left": [
+        105.0,
+        138.5
+      ]
+    },
+    {
+      "page": 2,
+      "native_id": 1,
+      "center_mm_from_bottom_left": [
+        105.0,
+        158.5
+      ],
+      "center_mm_from_top_left": [
+        105.0,
+        138.5
+      ]
+    },
+    {
+      "page": 3,
+      "native_id": 2,
+      "center_mm_from_bottom_left": [
+        105.0,
+        158.5
+      ],
+      "center_mm_from_top_left": [
+        105.0,
+        138.5
+      ]
+    },
+    {
+      "page": 4,
+      "native_id": 3,
+      "center_mm_from_bottom_left": [
+        105.0,
+        158.5
+      ],
+      "center_mm_from_top_left": [
+        105.0,
+        138.5
+      ]
+    }
+  ],
+  "versions": {
+    "reportlab": "4.5.1",
+    "svglib": "1.6.0",
+    "svgwrite": "1.4.3"
+  },
+  "pdf_sha256": "40c1f4cff6c056eb171c73f81b0ced9dbf8751a13f318cfad7bc2a4cd5598801",
+  "measurements_sha256": "02e9c603174feff308c5570c513fc69e17a4112936aa7f94f03810b2bbda98c7",
+  "physical_print_validated": false,
+  "metric_capture_validated": false
+}

@@ -1,5 +1,9 @@
 # Фото/видео → облако, mesh и связанные результаты
 
+Вход в весь рабочий цикл — [skill](../.agents/skills/photogrammetry-workflow/SKILL.md):
+подготовка человека, выбор ветки, оценка и итерация. Текущая работа —
+[Goal #15](goal-15.md); [памятка оператору](operator.md) передаётся отдельно.
+
 Отключаемая насадка Goal #12: [автоматические маски](auto-masks.md).
 На 37 реальных кадрах проверены generator → PNG → native Standard cloud/mesh;
 [результат и ограничения](reports/2026-11-22/auto-masks.md). При `masks: null`
@@ -19,7 +23,8 @@ project/cache и штатный CLI. Принятое видео Goal #6 дал�
 полного графа. Для масок, стола и переворота сначала открыть соответствующую
 строку [карты сценариев](meshroom-modes.md), затем нужный рецепт.
 Для готового backup можно сразу перейти к [локальному отчёту](#локальный-отчёт).
-Базовый бюджет Goal #8 — $0: новая аренда для чтения сохранённых файлов не нужна.
+Чтение сохранённых файлов и локальная итерация #15 новой аренды не требуют.
+Исторические бюджеты #6/#12 не являются новым разрешением на аренду.
 
 Завершённый Goal #4 сохраняет
 [полный принятый рецепт 2026](https://github.com/Kwentin3/photogrammetry-to-cad/blob/b907fb4c95f3d0c9a5a3150b45e15f2057389509/docs/runbook.md),
@@ -241,6 +246,24 @@ renameKeyframes=false сохраняют zero-based source indices; native frame
 portrait orientation до MVS. При blur доступен native smart отбор по sharpness/flow;
 он изучен по интерфейсу, но в Goal #6 реально проверен только regular отбор.
 Отдельный самописный ранжировщик не нужен.
+
+Для Smart заменить только native настройки отбора, например:
+
+```json
+{
+  "selectionMethod.useSmartSelection": true,
+  "selectionMethod.smartSelection.pxDisplacement": 10.0,
+  "selectionMethod.smartSelection.minNbOutFrames": 20,
+  "selectionMethod.smartSelection.maxNbOutFrames": 100,
+  "renameKeyframes": false,
+  "outputExtension": "jpg"
+}
+```
+
+Это рецепт для выбора, не выполненный Smart-прогон. Числа подобрать по длине,
+движению и перекрытию конкретного материала, затем открыть фактически выбранные
+кадры. Команды prepare/compute/seal те же, но новый PROJECT/FRAMES/JOB сохраняет
+прежний отбор. При смене кадров формируется новый manifest и реконструкция.
 
 ## Подготовка, sparse, масштаб, dense и экспорт
 
@@ -581,6 +604,10 @@ Open3D может объединять совпадающие OBJ vertices: ег
 
 ### Открыть облако и raw OBJ
 
+Повторяемые виды для агента без GUI, исходники/маски и сравнение итерации —
+[визуальная проверка](geometry-review.md). Перед сдачей требуется открыть
+созданные изображения; сам JSON/файл превью не заменяет осмотр.
+
 В интерактивной сессии использовать существующий CloudCompare (отдельно применив
 описанный поворот OBJ) или штатный Open3D API ниже. Подставить фактические пути;
 закрыть окно после осмотра. Этот GUI-рецепт не выполняется в headless приёмке #8:
@@ -623,9 +650,11 @@ o3d.visualization.draw_geometries([cloud, mesh])
 связывает выбранные файлы с SHA; `verify` проверяет их неизменность до compute/resume.
 Для masked Legacy обязательны EXR с alpha и camera metadata: adapter задаёт
 outputFileType=exr и saveMetadata=true. Для dense нужна полярность keep=nonzero,
-reject=zero. Эти проверки общего adapter локальные; нового masked GPU-прогона
-не было, полный masked Standard не квалифицирован. Автосегментация, turntable
-и две стороны остаются изученными, пока нет их реального прогона;
+reject=zero. В #12 реально выполнены SAM2.1/HF GroundingDINO → PNG →
+Standard dense-only cloud/mesh на 37 кадрах; камеры совпали с baseline.
+Legacy с масками, маски до SfM, turntable и две стороны не квалифицированы
+реальным полным прогоном. Для CCTag3 с масками и движения меток сначала
+прочитать [сочетания](capture.md#метки-вместе-с-масками-и-движением-объекта);
 зависимости/ограничения — в [матрице](meshroom-modes.md).
 
 По умолчанию scale.mode=unknown: произвольные SfM units, без физических мм.

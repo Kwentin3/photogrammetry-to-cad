@@ -1,0 +1,6 @@
+# Optional printable-kit generation and native CCTag PDF/photo preflight.
+# AliceVision's official detector is supplied separately; these are not ML libs.
+svgwrite==1.4.3
+reportlab==4.5.1
+svglib==1.6.0
+PyMuPDF==1.26.5
