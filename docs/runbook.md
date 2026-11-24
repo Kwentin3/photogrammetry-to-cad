@@ -1,8 +1,10 @@
 # Фото/видео → облако, mesh и связанные результаты
 
 Вход в весь рабочий цикл — [skill](../.agents/skills/photogrammetry-workflow/SKILL.md):
-подготовка человека, выбор ветки, оценка и итерация. Текущая работа —
-[Goal #15](goal-15.md); [памятка оператору](operator.md) передаётся отдельно.
+подготовка человека, выбор ветки, оценка и итерация. Подготовка GPU проверена в
+[Goal #19](goal-19.md) ([фактический отчёт](reports/2026-11-24/gpu-preparation.md));
+принятый полный цикл — [Goal #15](goal-15.md).
+[Памятка оператору](operator.md) передаётся отдельно.
 
 Отключаемая насадка Goal #12: [автоматические маски](auto-masks.md).
 На 37 реальных кадрах проверены generator → PNG → native Standard cloud/mesh;
@@ -47,8 +49,9 @@ project/cache и штатный CLI. Принятое видео Goal #6 дал�
 
 ## До аренды: файлы, доступ и пределы
 
-Нужны полная постоянная копия runtime, съёмка, место для backup, доступ к Vast/SSH
-и действующий денежный допуск. Для #6 подтверждены **$0.60/ч, 4 часа от первой
+Нужны доступная полная постоянная копия runtime у владельца (допустим закрытый
+cloud release), съёмка, место для backup, доступ к Vast/SSH и действующий денежный
+допуск. Перенос runtime на Windows перед арендой не требуется. Для #6 подтверждены **$0.60/ч, 4 часа от первой
 аренды, $25 суммарно**, включая диск/трафик; автоматический stop — через 3.5 часа.
 Повтор/смена ноды не обнуляют срок и бюджет. Другой Goal требует сверки допуска.
 
@@ -64,16 +67,27 @@ $work='D:/photogrammetry-work/goal6'
 $python="$work/venv/Scripts/python.exe"
 $vastai="$work/venv/Scripts/vastai.exe"
 $pin=Get-Content "$repo/configs/runtime-2026.json" -Raw -Encoding UTF8 | ConvertFrom-Json
-$archive=[IO.Path]::GetFullPath((Join-Path $repo $pin.retained_copy_relative_to_checkout))
-if ((Get-Item $archive).Length -ne $pin.archive_bytes) { throw 'Runtime size' }
-if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pin.archive_sha256) { throw 'Runtime SHA256' }
 ```
 
 Ожидается `Meshroom-2026.11.21-b12ea88-linux-full.tar.gz`, 600156630 байт,
 SHA256 `4ca3cfb0898b8000def4e68d513468a199b948329b63cdb6b257e427d295163b`.
-Путь постоянной копии и image digest — в [runtime lock](../configs/runtime-2026.json).
-Rolling nightly может исчезнуть. Без полной доступной копии ноду не арендовать;
-ядра на GPU не компилировать.
+Locator постоянной копии и image digest — в [runtime lock](../configs/runtime-2026.json).
+До create проверить доступ к выбранному cloud-source: разрешить private locator
+через authenticated API владельца, сверить asset identity/name, размер и digest
+с pin, убедиться в доступности авторизованной загрузки. Проверка API/метаданных
+не заменяет последующие download SHA, bootstrap и native обработку на GPU.
+Rolling nightly может исчезнуть; без доступной постоянной owner-копии ноду
+не арендовать. Ядра на GPU не компилировать.
+
+Локальный архив — необязательный резерв. Следующий блок выполнять только при
+явном выборе локального fallback перед его SFTP-передачей; для штатного
+cloud-source он не нужен:
+
+```powershell
+$archive=[IO.Path]::GetFullPath((Join-Path $repo $pin.retained_copy_relative_to_checkout))
+if ((Get-Item $archive).Length -ne $pin.archive_bytes) { throw 'Runtime size' }
+if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pin.archive_sha256) { throw 'Runtime SHA256' }
+```
 
 До create сверить карточку, незавершённые процессы/аренды и все страницы native
 `show instances-v1 --limit 25 --raw` (`--next-token` при наличии). Проверить полную
@@ -84,6 +98,12 @@ Rolling nightly может исчезнуть. Без полной доступ�
 & $vastai search offers 'gpu_name=RTX_3090 num_gpus=1 cpu_arch=amd64 verified=true rentable=true direct_port_count>=1 cpu_ram>=32 disk_space>=60 cuda_vers>=12.8 dph_total<=0.60' --storage 60 --type on-demand -o dph_total --limit 5 --raw
 ```
 
+При важной скорости доставки можно добавить к native query, например,
+`inet_down>=200`; порог выбирается под размер файлов и срок. Это заявленная
+характеристика оффера, не измерение канала Windows → GPU и не доказательство
+причины долгого `loading`. Отдельно измерять create → SSH-ready, установку,
+передачу и расчёт по [карточке запуска](../templates/run-record.md).
+
 ## Создание, deadline и передача
 
 Account key остаётся в защищённом контексте управляющей машины. **До create**
@@ -93,7 +113,8 @@ Account key остаётся в защищённом контексте упра
 
 ```powershell
 # Только для первой аренды; при повторе взять сохранённый deadlineEpoch из карточки.
-$deadlineEpoch=[DateTimeOffset]::UtcNow.AddMinutes(210).ToUnixTimeSeconds()
+$stopAfterMinutes=45 # Пример разрешённого #19; для нового задания — из его допуска.
+$deadlineEpoch=[DateTimeOffset]::UtcNow.AddMinutes($stopAfterMinutes).ToUnixTimeSeconds()
 $buffer=[IO.MemoryStream]::new()
 $gzip=[IO.Compression.GZipStream]::new($buffer,[IO.Compression.CompressionMode]::Compress,$true)
 $bytes=[IO.File]::ReadAllBytes("$repo/scripts/rental_deadline.sh")
@@ -127,16 +148,49 @@ UTC начала, абсолютный deadline, ставки/ресурсы, co
 исходники известного commit с SHA256 упаковки; `git archive` не включает
 незакоммиченные изменения. SHA сравнить на обеих сторонах до распаковки.
 
-Большие передачи в обе стороны — параллельно: для HTTP native aria2
-(`-j8 -x8 -s8`, resume, `--checksum=sha-256=...`), для приватных файлов — rclone
-1.76.0 SFTP. Приватный remote `worker` содержит host/port/user/key_file и
+Для новой задачи передавать только нужные оригиналы фото/видео, settings/manifest
+и исходники выбранного commit. Runtime нода получает по HTTP по рецепту ниже;
+сохранённый локальный архив — резерв. Cache передавать лишь для явного resume
+совместимого проекта/runtime, сохранив все его зависимости. ML-окружение и веса
+нужны только выбранному сценарию масок.
+
+Большие передачи в обе стороны — параллельно. Для приватных файлов используем
+native rclone 1.76.0 SFTP. Приватный remote `worker` содержит host/port/user/key_file и
 **known_hosts_file**; без последнего rclone по умолчанию не проверяет host key.
-Проверенный профиль для OpenSSH с random-offset writes:
+Например, вне Git создать обычный rclone config (значения заменить своими):
+
+```ini
+[worker]
+type = sftp
+host = GPU_HOST
+port = GPU_SSH_PORT
+user = root
+key_file = PRIVATE_KEY_FILE
+known_hosts_file = TRUSTED_KNOWN_HOSTS_FILE
+host_key_algorithms = ssh-ed25519
+shell_type = unix
+```
+
+Проверенный профиль для OpenSSH с random-offset writes. Сначала каталог фото:
+несколько файлов одновременно; файлы меньше cutoff идут без multithread разбиения.
+Все значения — изменяемые native CLI options, не отдельный transfer API:
 
 ```powershell
 $rclone="$work/tools/rclone-v1.76.0/rclone.exe"
-$transfer=@('--config',"$work/rclone.private.conf",'--multi-thread-streams','8','--multi-thread-cutoff','16M','--multi-thread-chunk-size','4M','--sftp-multithread-upload','--transfers','1','--checkers','1','--retries','1','--low-level-retries','1','--timeout','30s','--contimeout','15s','--max-duration','10m','--stats','5s')
+$sftp=@('--config',"$work/rclone.private.conf",'--multi-thread-streams','8','--multi-thread-cutoff','16M','--multi-thread-chunk-size','4M','--sftp-multithread-upload','--retries','1','--low-level-retries','1','--timeout','30s','--contimeout','15s','--max-duration','10m','--stats','5s')
+& $rclone copy "$work/capture/images" 'worker:/root/photo-cad/work/capture/images' @sftp --transfers 8 --checkers 4
+if ($LASTEXITCODE -ne 0) { throw 'Photo transfer incomplete; inspect before retry' }
+$transfer=@($sftp)+@('--transfers','1','--checkers','1')
+```
+
+Следующий блок — **только резерв runtime после подтверждённого отказа основного
+HTTP-источника**, когда прежний transfer завершён и дальнейшее действие записано
+в карточке. При успешном HTTP-рецепте его не выполнять. Один большой приватный
+файл передаётся до 8 streams внутри файла; затем используется bootstrap `--archive`:
+
+```powershell
 & $rclone copyto $archive "worker:/root/photo-cad/runtime/$($pin.archive_name)" @transfer
+if ($LASTEXITCODE -ne 0) { throw 'Archive transfer incomplete; inspect before retry' }
 ```
 
 Не задавать `--sftp-connections`/`--sftp-disable-concurrent-writes`: они отключают
@@ -144,25 +198,160 @@ $transfer=@('--config',"$work/rclone.private.conf",'--multi-thread-streams','8',
 срок и резерв на cleanup; `10m` — пример. После timeout/cancel подтвердить
 завершение своей передачи и закрытие файлов до повтора. Доставка, облачный цикл
 и полномочия подробнее описаны в [инфраструктуре](infrastructure.md).
+`--max-duration` не доказывает завершение клиента: в #19 потребовалась адресная
+остановка PID и проверка remote holders. После SSH handshake EOF завершить
+конкурирующие свои передачи и при необходимости уменьшить streams/transfers,
+зафиксировав новые значения и проверив SHA. В #19 последовательный повтор с
+четырьмя streams прошёл; это не доказывает причину EOF или универсальный оптимум.
+
+Повторный `rclone copy/copyto` обычно пропускает завершённый совпадающий файл
+по native сравнению размера/времени (или поддерживаемому checksum); это не
+криптографическая приёмка. `--retries` повторяет неуспешную операцию, а не обещает
+продолжение SFTP с последнего байта: незавершённый файл может передаться заново.
+Для дорогого повтора заранее допустимы [отдельные части](#backup-освобождение-аренды-и-локальный-отчёт).
+Проверять конечные SHA/manifest независимо от skip и exit 0. Доступны все native
+параметры: `rclone copy --help`, `rclone copyto --help`, `rclone help backend sftp`,
+[SFTP](https://rclone.org/sftp/), [multithread transfers](https://rclone.org/docs/#multi-thread-transfers).
+В начале смотреть bytes/s и число активных файлов/streams, затем оценивать остаток
+TTL, диск и трафик. Останавливать собственный managed RunId или конкретный remote
+job/process group, сохраняя завершённые файлы; массовый stop по имени не нужен.
 
 ## Linux: runtime, JSON и ресурсы
 
 Дальше Bash на GPU. Установить системные python3/curl/ca-certificates/tar/gzip/
 util-linux/coreutils/aria2 пакетным менеджером с ограниченным сроком. Пути — пример:
 
-```bash
-set -euo pipefail
-export REPO=/root/photo-cad/repo WORK=/root/photo-cad/work
-mkdir -p "$WORK/jobs" "$WORK/config" "$WORK/capture"
-cd "$WORK"
-setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/bootstrap" 600 -- \
-  bash "$REPO/scripts/bootstrap_meshroom.sh" /root/photo-cad/runtime \
-  --archive /root/photo-cad/runtime/Meshroom-2026.11.21-b12ea88-linux-full.tar.gz \
-  >"$WORK/jobs/bootstrap-launch.log" 2>&1 </dev/null
+Ниже исполняемый рецепт **в свежем Bash до source Meshroom env**. `REPO` — checkout,
+`WORK` — рабочая папка вне него. Приоритет: экспортированная переменная → значение
+рецепта; `RUNTIME_URL` → `archive_url` выбранного `RUNTIME_LOCK`. Rolling
+`upstream_url` допустим лишь при явном выборе URL, скрытого fallback нет.
+Для закрытого release постоянный asset URL без аутентификации может отвечать 404:
+это не доказательство удаления файла. Владелец на управляющей машине сначала
+проверяет asset через authenticated GitHub API и получает временный signed URL;
+на GPU передаёт только `RUNTIME_URL`, аккаунтный GitHub token туда не копирует.
+Истёкший signed URL нужно обновить на управляющей машине; недоступность
+и отказ аутентификации отмечать отдельно, сохраняя локальный `--archive` резерв.
+Signed URL и журналы команд остаются приватными вне Git.
+
+Для закрытого GitHub Release создать на управляющей Windows-машине вне Git
+`runtime-source.private.json` с `repository` (`OWNER/PRIVATE_REPO`) и `tag`
+(конкретный версионный тег). После публикации ПО выполнить следующий native
+рецепт внутри ограничителя среды. Он получает только HTTP headers; бинарные
+байты с компьютера не пересылаются. `gh` использует существующий вход владельца.
+Для уже сохранённой owner-копии взять locator рядом с runtime archive в
+`photogrammetry-to-cad-work/runtime-archives/` и скопировать в `$work`; создавать
+новый источник для каждого задания не нужно. Проверять его актуальную доступность.
+
+```powershell
+$source=Get-Content "$work/runtime-source.private.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+$pin=Get-Content "$repo/configs/runtime-2026.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+$releaseJson=& gh api "repos/$($source.repository)/releases/tags/$($source.tag)"
+if ($LASTEXITCODE -ne 0) { throw 'Private source unavailable; inspect authentication and locator' }
+$release=$releaseJson | ConvertFrom-Json
+if ($release.draft) { throw 'Publish the prepared private release before GPU use' }
+$assets=@($release.assets | Where-Object { $_.name -ceq $pin.archive_name })
+if ($assets.Count -ne 1 -or $assets[0].size -ne $pin.archive_bytes) { throw 'Pinned asset missing or wrong size' }
+$asset=$assets[0]
+if ($asset.digest -and $asset.digest -cne "sha256:$($pin.archive_sha256)") { throw 'Asset digest differs from pin' }
+$headersPath="$work/runtime-redirect.headers.private"
+$token=& gh auth token
+if ($LASTEXITCODE -ne 0) { throw 'Control-host GitHub authentication unavailable' }
+try {
+    & curl.exe --silent --show-error --head --max-time 20 --dump-header $headersPath --output NUL --header 'Accept: application/octet-stream' --header "Authorization: Bearer $token" $asset.url
+    if ($LASTEXITCODE -ne 0) { throw 'Asset header request failed' }
+    $headers=[IO.File]::ReadAllText($headersPath)
+    $status=[regex]::Matches($headers,'(?im)^HTTP/\S+\s+(\d{3})') | Select-Object -Last 1
+    $url=[regex]::Match($headers,'(?im)^Location:\s*(\S+)\s*$').Groups[1].Value
+    if ($status.Groups[1].Value -ne '302' -or -not $url -or ([uri]$url).Scheme -ne 'https') { throw 'Expected HTTPS signed redirect; inspect source, never send account token to GPU' }
+    $pin.archive_url=$url
+    $resolved="$work/runtime-resolved.private.json"
+    [IO.File]::WriteAllText($resolved,($pin | ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))
+    if ((Get-Content $resolved -Raw -Encoding UTF8 | ConvertFrom-Json).archive_url -cne $url) { throw 'Private source UTF8 readback failed' }
+} finally {
+    Remove-Variable token -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $headersPath) { Remove-Item -LiteralPath $headersPath }
+}
 ```
+
+Передать на свою GPU только `runtime-resolved.private.json` обычным rclone,
+выставить `RUNTIME_LOCK` на этот файл. Постоянный locator остаётся у владельца,
+signed URL обновляется перед новым запуском; не коммитить его и не печатать
+в публичный отчёт. При 404/401 сначала проверить доступ/locator, при 403 после
+истечения ссылки — получить новую. Если сервер не вернул ожидаемый redirect,
+не добавлять account token в downloader ноды: проверить source или выбрать
+явный локальный `--archive` резерв.
+
+`RUNTIME_ARIA2_CONF` переопределяет [native config](../configs/runtime-download.aria2.conf),
+native CLI-флаги в вызове aria2 имеют приоритет над конфигом. Менять их можно прямо
+в команде; SHA всегда берётся из lock и передаётся в `--checksum`.
+Альтернативный lock меняет источник/рецепт доставки, но должен сохранять pin
+установленного checkout: существующий bootstrap сверяет его собственный lock.
+`RUNTIME_DIR`, TTL и имена jobs тоже переопределяются. Повтор использует новые jobs
+(или штатный `remote_job.sh --resume` для той же команды), сохраняя каталог файла.
+Для запуска, переживающего разрыв SSH, сохранить содержимое отмеченного Bash-блока
+как LF-файл `$WORK/config/runtime-download.sh` вне checkout и запустить его
+`setsid -f bash "$WORK/config/runtime-download.sh" >"$WORK/jobs/runtime-launch.log" 2>&1 </dev/null`.
+Перед этим создать config/jobs, экспортировать выбранные переменные и вооружить
+deadline аренды; TTL отдельных фаз ниже остаются у существующего remote_job.
+
+<!-- runtime-download:start -->
+```bash
+set -Eeuo pipefail
+export REPO=${REPO:-/root/photo-cad/repo} WORK=${WORK:-/root/photo-cad/work}
+RUNTIME_LOCK=${RUNTIME_LOCK:-$REPO/configs/runtime-2026.json}
+RUNTIME_ARIA2_CONF=${RUNTIME_ARIA2_CONF:-$REPO/configs/runtime-download.aria2.conf}
+RUNTIME_DIR=${RUNTIME_DIR:-/root/photo-cad/runtime}
+RUNTIME_DOWNLOAD_TTL=${RUNTIME_DOWNLOAD_TTL:-900}
+RUNTIME_BOOTSTRAP_TTL=${RUNTIME_BOOTSTRAP_TTL:-600}
+RUNTIME_JOB_PREFIX=${RUNTIME_JOB_PREFIX:-runtime-$(date -u +%Y%m%dT%H%M%S)-$$}
+mapfile -t PIN < <(python3 - "$RUNTIME_LOCK" <<'PY'
+import json, re, sys
+p = json.load(open(sys.argv[1], encoding='utf-8'))
+assert re.fullmatch(r'[A-Za-z0-9._-]+', p['archive_name'])
+assert re.fullmatch(r'[0-9a-f]{64}', p['archive_sha256'])
+for key in ('archive_url', 'archive_name', 'archive_sha256'):
+    value = p[key]
+    assert isinstance(value, str) and '\n' not in value and '\r' not in value
+    assert value or key == 'archive_url'
+    print(value)
+PY
+)
+[[ ${#PIN[@]} == 3 ]]
+RUNTIME_URL=${RUNTIME_URL:-${PIN[0]}}
+[[ -n $RUNTIME_URL ]] || { printf '%s\n' 'Runtime URL is empty: export RUNTIME_URL with the signed URL resolved on the controlling machine, or set archive_url in RUNTIME_LOCK.' >&2; exit 1; }
+mkdir -p "$WORK/jobs" "$WORK/config" "$WORK/capture"
+mkdir -p "$RUNTIME_DIR"
+aria2c --version >"$WORK/config/$RUNTIME_JOB_PREFIX-aria2-version.txt"
+cp -- "$RUNTIME_LOCK" "$WORK/config/$RUNTIME_JOB_PREFIX-runtime-lock.json"
+cp -- "$RUNTIME_ARIA2_CONF" "$WORK/config/$RUNTIME_JOB_PREFIX-aria2.conf"
+bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/$RUNTIME_JOB_PREFIX-download" "$RUNTIME_DOWNLOAD_TTL" -- \
+  aria2c --conf-path="$WORK/config/$RUNTIME_JOB_PREFIX-aria2.conf" \
+  --checksum="sha-256=${PIN[2]}" --dir="$RUNTIME_DIR" --out="${PIN[1]}" "$RUNTIME_URL"
+bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/$RUNTIME_JOB_PREFIX-bootstrap" "$RUNTIME_BOOTSTRAP_TTL" -- \
+  bash "$REPO/scripts/bootstrap_meshroom.sh" "$RUNTIME_DIR" --archive "$RUNTIME_DIR/${PIN[1]}"
+```
+<!-- runtime-download:end -->
 
 Дождаться `state=succeeded`, `cleanup=confirmed`, прочитать probes/logs,
 проверить `nvidia-smi`. Bootstrap проверяет архив/ldd/CLI/imports, не dense PASS.
+`remote_job.sh` сохраняет command/log/status и ограничивает обе фазы отдельно;
+весь рецепт запускать под штатным владельцем SSH-сеанса с запасом срока на обе
+фазы и cleanup. При разрыве сначала проверить job/status и участников, не начинать
+конфликтующую загрузку. Прямой вызов ариа2 можно менять по `aria2c --help=all` и
+[native manual](https://aria2.github.io/manual/en/html/aria2c.html).
+
+При повторном aria2 завершённый файл проверяется по закреплённому SHA и
+переиспользуется; неполный с соседним `.aria2` control-файлом продолжается при
+`continue=true`. Сохранять оба файла до повтора; наличие файла и размер сами по
+себе успех не доказывают. Проверка готового файла может обращаться к HTTP-серверу:
+повторное использование не обещает нулевого сетевого трафика. В локальной
+[проверке #19](reports/2026-11-24/gpu-preparation.md) готовые 64 MiB не скачивались
+целиком повторно, но сервер успел отправить 128 KiB в socket buffer.
+Bootstrap reuse — отдельный шаг: существующая установка
+принимается по `.archive.sha256`, затем probes выполняются снова. Резерв без HTTP:
+доставить проверенный локальный архив и вызвать тот же bootstrap с `--archive`.
+Реальные download/reuse и native video/photo обработка этим блоком проверены
+в #19; новое задание всё равно требует проверки своих входов/status/результатов.
 Один раз создать настройки новой съёмки. Команда откажет, если файл уже существует:
 
 ```bash
@@ -501,15 +690,19 @@ tar -tzf $backup
 Обычный SSH не наследует per-instance env, исходный watchdog имеет его.
 Принятый API request, одиночный exited или отказ SSH не доказывают stop.
 
-Если один большой файл даже с 8 streams не укладывается в срок, после адресной
-остановки и подтверждённого закрытия старых SFTP sessions можно использовать
-штатные части. В #6 это подняло активную скорость с ~0.8 до ~2.45 MiB/s.
-На Linux под тем же bounded runner, в новой папке:
+Отдельные части — дополнительный native вариант для upload/download большого
+архива, когда нужны несколько файлов одновременно и повтор только незавершённых
+частей. Выбрать его можно сразу по известному каналу или после остановки
+предыдущего transfer и проверки закрытия SFTP sessions. В #6 это подняло активную
+скорость с ~0.8 до ~2.45 MiB/s; такой коэффициент для новой ноды не обещан.
+Размер части — параметр, не свой протокол. На Linux стороне источника под тем же
+bounded runner, в новой папке:
 
 ```bash
 cd "$WORK"
 mkdir backup-parts
-split -b 64M -d -a 3 -- deliverable.tar.gz backup-parts/part-
+PART_SIZE=${PART_SIZE:-64M}
+split -b "$PART_SIZE" -d -a 3 -- deliverable.tar.gz backup-parts/part-
 (cd backup-parts && sha256sum part-*) >backup-parts.sha256
 sha256sum deliverable.tar.gz >deliverable.tar.gz.sha256
 ```
@@ -545,6 +738,15 @@ try {
 # expected — SHA исходного полного архива, не SHA отдельных частей.
 if ((Get-FileHash -LiteralPath $joined -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected.ToLowerInvariant()) { throw 'Joined archive SHA mismatch' }
 ```
+
+Для upload уже подготовленных native частей направление меняется прямо в CLI:
+`& $rclone copy $partsDirectory 'worker:/root/photo-cad/work/incoming-parts' @partsArgs`.
+Manifest частей и SHA целого передаются отдельно; на принимающем Linux проверить
+`sha256sum -c`, собрать `cat part-* > NEW_ARCHIVE`, затем проверить SHA целого до
+распаковки. Размер части и число transfers/streams выбираются под ресурсные лимиты;
+их произведение задаёт верхнюю оценку числа одновременных потоков, а не обещанную
+скорость. Завершённые части повторный copy может пропустить, частичный SFTP-файл
+может начать заново. Native CLI/config и проверка SHA остаются владельцами передачи.
 
 После общего SHA распаковать и проверить индекс всех файлов/payloads как для
 обычного архива. Части и failed partial удалять только после этой приёмки,
