@@ -8,8 +8,11 @@
 
 Техническая основа проверена в Goal #2/#4; PR #3 и #5 влиты в main.
 Принятый Goal #6 и PR #7 влиты в main. Текущий [Goal #19](docs/goal-19.md)
-добавляет повторное получение ПО самой GPU из постоянного источника и
-конфигурируемую native доставку данных; реальная приёмка ещё не выполнена.
+проверил получение ПО самой GPU из постоянного закрытого источника, повторный
+download/bootstrap и native обработку MOV → 37 кадров, 3 JPEG → по 20000 features.
+Это CPU extraction на GPU-ноде, без нового dense/CAD; backup проверен, обе ноды
+удалены. Результаты — в [отчёте #19](docs/reports/2026-11-24/gpu-preparation.md),
+воспроизводимые команды — в [runbook](docs/runbook.md).
 Принятый [Goal #15](docs/goal-15.md) связывает подготовку съёмки, выбор режима,
 cloud/mesh, просмотр и итерации.
 Рабочая точка входа — [photogrammetry-workflow](.agents/skills/photogrammetry-workflow/SKILL.md);

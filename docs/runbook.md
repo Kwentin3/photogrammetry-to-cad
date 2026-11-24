@@ -1,8 +1,9 @@
 # Фото/видео → облако, mesh и связанные результаты
 
 Вход в весь рабочий цикл — [skill](../.agents/skills/photogrammetry-workflow/SKILL.md):
-подготовка человека, выбор ветки, оценка и итерация. Текущая работа —
-[Goal #19](goal-19.md); принятый полный цикл — [Goal #15](goal-15.md).
+подготовка человека, выбор ветки, оценка и итерация. Подготовка GPU проверена в
+[Goal #19](goal-19.md) ([фактический отчёт](reports/2026-11-24/gpu-preparation.md));
+принятый полный цикл — [Goal #15](goal-15.md).
 [Памятка оператору](operator.md) передаётся отдельно.
 
 Отключаемая насадка Goal #12: [автоматические маски](auto-masks.md).
@@ -112,7 +113,8 @@ Account key остаётся в защищённом контексте упра
 
 ```powershell
 # Только для первой аренды; при повторе взять сохранённый deadlineEpoch из карточки.
-$deadlineEpoch=[DateTimeOffset]::UtcNow.AddMinutes(210).ToUnixTimeSeconds()
+$stopAfterMinutes=45 # Пример разрешённого #19; для нового задания — из его допуска.
+$deadlineEpoch=[DateTimeOffset]::UtcNow.AddMinutes($stopAfterMinutes).ToUnixTimeSeconds()
 $buffer=[IO.MemoryStream]::new()
 $gzip=[IO.Compression.GZipStream]::new($buffer,[IO.Compression.CompressionMode]::Compress,$true)
 $bytes=[IO.File]::ReadAllBytes("$repo/scripts/rental_deadline.sh")
@@ -196,6 +198,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Archive transfer incomplete; inspect before re
 срок и резерв на cleanup; `10m` — пример. После timeout/cancel подтвердить
 завершение своей передачи и закрытие файлов до повтора. Доставка, облачный цикл
 и полномочия подробнее описаны в [инфраструктуре](infrastructure.md).
+`--max-duration` не доказывает завершение клиента: в #19 потребовалась адресная
+остановка PID и проверка remote holders. После SSH handshake EOF завершить
+конкурирующие свои передачи и при необходимости уменьшить streams/transfers,
+зафиксировав новые значения и проверив SHA. В #19 последовательный повтор с
+четырьмя streams прошёл; это не доказывает причину EOF или универсальный оптимум.
 
 Повторный `rclone copy/copyto` обычно пропускает завершённый совпадающий файл
 по native сравнению размера/времени (или поддерживаемому checksum); это не
@@ -231,6 +238,9 @@ Signed URL и журналы команд остаются приватными 
 (конкретный версионный тег). После публикации ПО выполнить следующий native
 рецепт внутри ограничителя среды. Он получает только HTTP headers; бинарные
 байты с компьютера не пересылаются. `gh` использует существующий вход владельца.
+Для уже сохранённой owner-копии взять locator рядом с runtime archive в
+`photogrammetry-to-cad-work/runtime-archives/` и скопировать в `$work`; создавать
+новый источник для каждого задания не нужно. Проверять его актуальную доступность.
 
 ```powershell
 $source=Get-Content "$work/runtime-source.private.json" -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -340,8 +350,8 @@ bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/$RUNTIME_JOB_PREFIX-bootstrap" "$
 Bootstrap reuse — отдельный шаг: существующая установка
 принимается по `.archive.sha256`, затем probes выполняются снова. Резерв без HTTP:
 доставить проверенный локальный архив и вызвать тот же bootstrap с `--archive`.
-Реальный запуск нового HTTP-рецепта и обработки требуется отдельно; этот блок
-сам по себе не подтверждает GPU PASS.
+Реальные download/reuse и native video/photo обработка этим блоком проверены
+в #19; новое задание всё равно требует проверки своих входов/status/результатов.
 Один раз создать настройки новой съёмки. Команда откажет, если файл уже существует:
 
 ```bash
