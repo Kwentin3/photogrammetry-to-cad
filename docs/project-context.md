@@ -1,10 +1,10 @@
 # Цель и решения
 
-Поставка [Goal #15](goal-15.md) опубликована в
+Поставка [Goal #15](goal-15.md) включена в `main` через
 [PR #16](https://github.com/Kwentin3/photogrammetry-to-cad/pull/16): подготовка
 съёмки, выбор режима, cloud/mesh, просмотр и итерации. Native PDF, реальная
 итерация и самостоятельный проход проверены; независимая приёмка **PASS R1–R6**,
-PR готов к ревью. Вход —
+PR влит. Вход —
 [skill](../.agents/skills/photogrammetry-workflow/SKILL.md).
 
 Принятый [Goal #12](goal-12.md): SAM2.1-small + локальный HF
