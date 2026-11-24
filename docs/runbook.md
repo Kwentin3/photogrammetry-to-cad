@@ -48,8 +48,9 @@ project/cache и штатный CLI. Принятое видео Goal #6 дал�
 
 ## До аренды: файлы, доступ и пределы
 
-Нужны полная постоянная копия runtime, съёмка, место для backup, доступ к Vast/SSH
-и действующий денежный допуск. Для #6 подтверждены **$0.60/ч, 4 часа от первой
+Нужны доступная полная постоянная копия runtime у владельца (допустим закрытый
+cloud release), съёмка, место для backup, доступ к Vast/SSH и действующий денежный
+допуск. Перенос runtime на Windows перед арендой не требуется. Для #6 подтверждены **$0.60/ч, 4 часа от первой
 аренды, $25 суммарно**, включая диск/трафик; автоматический stop — через 3.5 часа.
 Повтор/смена ноды не обнуляют срок и бюджет. Другой Goal требует сверки допуска.
 
@@ -65,16 +66,27 @@ $work='D:/photogrammetry-work/goal6'
 $python="$work/venv/Scripts/python.exe"
 $vastai="$work/venv/Scripts/vastai.exe"
 $pin=Get-Content "$repo/configs/runtime-2026.json" -Raw -Encoding UTF8 | ConvertFrom-Json
-$archive=[IO.Path]::GetFullPath((Join-Path $repo $pin.retained_copy_relative_to_checkout))
-if ((Get-Item $archive).Length -ne $pin.archive_bytes) { throw 'Runtime size' }
-if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pin.archive_sha256) { throw 'Runtime SHA256' }
 ```
 
 Ожидается `Meshroom-2026.11.21-b12ea88-linux-full.tar.gz`, 600156630 байт,
 SHA256 `4ca3cfb0898b8000def4e68d513468a199b948329b63cdb6b257e427d295163b`.
-Путь постоянной копии и image digest — в [runtime lock](../configs/runtime-2026.json).
-Rolling nightly может исчезнуть. Без полной доступной копии ноду не арендовать;
-ядра на GPU не компилировать.
+Locator постоянной копии и image digest — в [runtime lock](../configs/runtime-2026.json).
+До create проверить доступ к выбранному cloud-source: разрешить private locator
+через authenticated API владельца, сверить asset identity/name, размер и digest
+с pin, убедиться в доступности авторизованной загрузки. Проверка API/метаданных
+не заменяет последующие download SHA, bootstrap и native обработку на GPU.
+Rolling nightly может исчезнуть; без доступной постоянной owner-копии ноду
+не арендовать. Ядра на GPU не компилировать.
+
+Локальный архив — необязательный резерв. Следующий блок выполнять только при
+явном выборе локального fallback перед его SFTP-передачей; для штатного
+cloud-source он не нужен:
+
+```powershell
+$archive=[IO.Path]::GetFullPath((Join-Path $repo $pin.retained_copy_relative_to_checkout))
+if ((Get-Item $archive).Length -ne $pin.archive_bytes) { throw 'Runtime size' }
+if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pin.archive_sha256) { throw 'Runtime SHA256' }
+```
 
 До create сверить карточку, незавершённые процессы/аренды и все страницы native
 `show instances-v1 --limit 25 --raw` (`--next-token` при наличии). Проверить полную
