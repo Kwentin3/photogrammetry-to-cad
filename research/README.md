@@ -62,7 +62,9 @@ Grounded-SAM 2 добавляется только при потребности
 
 ## Тематические исследования
 
-- [Съёмка на Android с обратной связью — готовые решения и аудит интеграции](live-capture-feedback.md) (25 ноября 2026, по [issue #23](https://github.com/Kwentin3/photogrammetry-to-cad/issues/23)): сравнение RealityScan Mobile, RTAB-Map Android, полевого `sparse-only` SfM и собственного ARCore-клиента; аудит инкрементального SfM в закреплённом Meshroom 2026. Это исследовательский материал, не изменение текущего рабочего маршрута.
+- [Съёмка на Android с обратной связью — готовые решения и аудит интеграции](live-capture-feedback.md) (25 ноября 2026, по [issue #23](https://github.com/Kwentin3/photogrammetry-to-cad/issues/23)): сравнение RealityScan Mobile, RTAB-Map Android, пакетного `sparse-only` SfM и собственного ARCore-клиента; аудит инкрементального SfM в закреплённом Meshroom 2026. Это исследовательский материал, не изменение текущего рабочего маршрута.
+  - [Инструкция владельцу для первого опыта с RealityScan Mobile](realityscan-pilot-operator.md).
+  - [Процедура подготовки наборов А/Б и проверки нашим процессом](realityscan-pilot-verification.md).
 
 ## Архив
 
