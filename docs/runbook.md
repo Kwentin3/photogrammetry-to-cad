@@ -467,8 +467,11 @@ portrait orientation до MVS. При blur доступен native smart отб�
 }
 ```
 
-Это рецепт для выбора, не выполненный Smart-прогон. Числа подобрать по длине,
-движению и перекрытию конкретного материала, затем открыть фактически выбранные
+Числа в этом JSON — пример настройки. Native Smart реально выполнен на первом
+видео владельца: отобраны 160 кадров, восстановлен лишь локальный фрагмент;
+[результат](https://github.com/Kwentin3/photogrammetry-to-cad/blob/3c4ab0b9c03f31fb1843242ecb89555b44ae17cb/docs/reports/2026-11-25/room-smart.md).
+Сам выбор резких кадров не гарантирует связность 3D. Параметры подбирать по
+длине, движению и перекрытию материала, затем открыть фактически выбранные
 кадры. Команды prepare/compute/seal те же, но новый PROJECT/FRAMES/JOB сохраняет
 прежний отбор. При смене кадров формируется новый manifest и реконструкция.
 
@@ -538,17 +541,19 @@ sparse.output**. После scale это всё ещё сцена до прео�
 или исторического значения. Пример читает существующий runtime через тот же helper:
 
 ```bash
-mapfile -t SPARSE_EXPORT < <("$MESHROOM_PYTHON" - "$REPO/scripts" "$RUN" <<'PY'
+mapfile -t SPARSE_EXPORT < <("$MESHROOM_PYTHON" - "$REPO/scripts" "$RUN" <<'PY' | sed -n 's/^SPARSE_EXPORT=//p'
 import sys
 sys.path.insert(0, sys.argv[1])
 import reconstruction as r
 _, e, g, _ = r.load(sys.argv[2])
-print(g.node(e['sparse_node']).output.value)
+print('SPARSE_EXPORT=' + g.node(e['sparse_node']).output.value)
 owner = r.node(g, 'TracksBuilding' if e['settings']['pipeline']=='standard' else 'StructureFromMotion')
-print(','.join(owner.describerTypes.value))
+print('SPARSE_EXPORT=' + ','.join(owner.describerTypes.value))
 PY
 )
+[[ ${#SPARSE_EXPORT[@]} == 2 ]]
 SPARSE_NATIVE=${SPARSE_EXPORT[0]}; SPARSE_TYPES=${SPARSE_EXPORT[1]}
+[[ -s $SPARSE_NATIVE && -n $SPARSE_TYPES ]]
 bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/sparse-points-standard" 120 -- \
   taskset -c "$CPUS" aliceVision_convertSfMFormat --input "$SPARSE_NATIVE" \
   --output "$RUN/sparse-points.ply" --describerTypes "$SPARSE_TYPES" \
@@ -560,6 +565,12 @@ bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/sparse-cameras-standard" 120 -- \
 ```
 
 Для повторного экспорта выбрать новые outputs/JOB_DIR, сохранив прежние.
+Префикс `SPARSE_EXPORT=` отделяет два значения от native trace в stdout
+при импорте bundled runtime; проверка числа полей и файла не даёт принять
+строку журнала за путь сцены.
+В сериализованных `effective-settings.nodes.*.inputs` может храниться ссылка
+вида `{FeatureMatching_1.describerTypes}`. Для разрешённого значения нужен
+загруженный native граф, как в примере; строку ссылки не считать списком типов.
 Не опускать `--describerTypes`: в этой закреплённой версии пустое значение
 [очищает landmarks](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/software/convert/main_convertSfMFormat.cpp#L157).
 Native PLY с extrinsics содержит только центры views с действительными
