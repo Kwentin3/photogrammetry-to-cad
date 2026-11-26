@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -31,6 +32,84 @@ NATIVE_DESCRIPTORS = base64.b64decode(
     "AgAAAAAAAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 )
 NATIVE_FEATURES = "511.134 441.626 41.6458 0\n682.664 457.109 39.1811 0\n"
+
+
+class PublishedWorkingCopyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if os.name == "nt":
+            # Use Git Bash, never the System32 WSL launcher.
+            candidates = [Path("C:/Program Files/Git/bin/bash.exe"),
+                          Path("C:/Program Files (x86)/Git/bin/bash.exe")]
+            cls.bash = next((str(path) for path in candidates if path.is_file()), None)
+        else:
+            cls.bash = shutil.which("bash")
+        if cls.bash is None:
+            raise unittest.SkipTest("Published recipe behavior requires ordinary Bash")
+
+    @staticmethod
+    def published_recipe():
+        document = (ROOT / "docs/capture.md").read_text(encoding="utf-8")
+        section = document.split("<!-- capture-working-copy:start -->", 1)[1].split(
+            "<!-- capture-working-copy:end -->", 1)[0]
+        return section.split("```bash\n", 1)[1].split("```", 1)[0]
+
+    def run_recipe(self, work):
+        env = os.environ.copy()
+        env["WORK"] = work.as_posix()
+        for key in ("BASH_ENV", "SHELLOPTS"):
+            env.pop(key, None)
+        return subprocess.run([self.bash, "--noprofile", "--norc", "-c", self.published_recipe()],
+                              env=env, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=15)
+
+    def test_create_then_preserve_confirmed_bytes_on_repeated_runs(self):
+        template = (ROOT / "templates/capture-kit/measurements.csv").read_bytes()
+        with tempfile.TemporaryDirectory(prefix="capture copy guard ") as temporary:
+            work = Path(temporary)
+            (work / "capture-kit-02").mkdir()
+            (work / "capture-kit-02/measurements.csv").write_bytes(template)
+            target = work / "capture/measurements.csv"
+            result = self.run_recipe(work)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Создана рабочая форма", result.stdout)
+            self.assertEqual(target.read_bytes(), template)
+            self.assertFalse((work / "measurements.csv").exists())
+            with target.open(encoding="utf-8", newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            for row in rows:
+                if row["purpose"] == "scale":
+                    row.update(status="confirmed_nominal", method="checked during fixture installation",
+                               confirmation_source="Synthetic fixture operator confirmation")
+            with target.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=FIELDS)
+                writer.writeheader()
+                writer.writerows(rows)
+            confirmed_scale(load_measurements(target))
+            confirmed = target.read_bytes()
+            for _ in range(2):
+                result = self.run_recipe(work)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Сохранена существующая рабочая форма", result.stdout)
+                self.assertEqual(target.read_bytes(), confirmed)
+
+    def test_preserve_empty_file_and_report_copy_error(self):
+        with tempfile.TemporaryDirectory(prefix="capture copy guard ") as temporary:
+            work = Path(temporary)
+            target = work / "capture/measurements.csv"
+            target.parent.mkdir()
+            target.touch()
+            result = self.run_recipe(work)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Сохранена существующая рабочая форма", result.stdout)
+            self.assertEqual(target.read_bytes(), b"")
+        with tempfile.TemporaryDirectory(prefix="capture missing kit ") as temporary:
+            work = Path(temporary)
+            result = self.run_recipe(work)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Не удалось создать рабочую форму", result.stderr)
+            self.assertNotIn("Создана рабочая форма", result.stdout)
+            self.assertFalse((work / "capture/measurements.csv").exists())
 
 
 class NativeRegionContractTests(unittest.TestCase):

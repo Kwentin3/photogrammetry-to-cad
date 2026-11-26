@@ -281,6 +281,96 @@ class ReconstructionReportTests(unittest.TestCase):
         self.write(self.settings, self.config)
         self.write(self.evidence, evidence)
 
+    def stock_measurement_sheet(self):
+        """Issued form with confirmed print/scale/control; optional blanks unchanged."""
+        path = self.root / 'measurements.csv'
+        with (SCRIPTS.parent / 'templates/capture-kit/measurements.csv').open(encoding='utf-8', newline='') as stream:
+            rows = list(csv.DictReader(stream))
+        for row in rows:
+            if row['purpose'] == 'print_check':
+                row.update(status='measured', measured_mm='100', method='ruler',
+                           confirmation_source='operator: print checked')
+            elif row['purpose'] in {'scale', 'check'} and not row['from_point'].startswith('REPLACE_'):
+                row.update(status='confirmed_nominal', method='checked at placement',
+                           confirmation_source='operator: prescribed distances set')
+        with path.open('w', encoding='utf-8', newline='') as stream:
+            writer = csv.DictWriter(stream, fieldnames=measurements.FIELDS)
+            writer.writeheader()
+            writer.writerows(rows)
+        marker = self.data['structure'][0]
+        self.data['structure'] = [{**deepcopy(marker), 'landmarkId': str(40 + mid),
+            'color': [mid, 0, 0], 'X': point} for mid, point in enumerate(
+                ([0, 0, 0], [1500, 0, 0], [0, 0, 100], [1000, 0, 100]))]
+        self.write(self.scene, self.data)
+        return path
+
+    def test_stock_form_background_rows_do_not_raise_3d_attention(self):
+        path = self.stock_measurement_sheet()
+        self.bind_measurement_export(path)
+        result = reporting.report(self.scene, self.cloud, self.settings, mesh_path=self.mesh, tolerance_mm=.1)
+        self.assertEqual(result['measurements']['status'], 'compared')
+        rows = result['measurements']['rows']
+        self.assertEqual(len(rows), 12)
+        self.assertEqual(result['measurements']['unverified_rows'], 10)
+        control = next(row for row in rows if row['measurement_id'] == 'marker_check_2_3')
+        self.assertEqual(control['check_status'], 'control_within_tolerance')
+        self.assertEqual(control['difference_mm'], 0)
+        table = reporting.markdown_table(result)
+        for row in rows:
+            self.assertIn(row['measurement_id'] + ' (', table)
+
+    def test_selected_rows_keep_attention_even_when_other_rows_are_background(self):
+        changes = [
+            ('planned marker pair', 'marker_check_2_3', {'status': 'planned'}, 'unconfirmed_distance'),
+            ('unknown marker pair', 'marker_check_2_3', {'status': 'unknown', 'planned_mm': ''}, 'unconfirmed_distance'),
+            ('concrete manual endpoints', 'object_check_1', {'from_point': 'door:left', 'to_point': 'door:right'}, 'non_marker_reference'),
+            ('measured manual parameter', 'object_check_1', {'purpose': 'manual_parameter', 'from_point': 'door:left',
+                'to_point': 'door:right', 'status': 'measured', 'measured_mm': '700', 'method': 'ruler',
+                'confirmation_source': 'operator reply'}, 'non_marker_reference'),
+            ('planned optional dimension', 'object_check_1', {'status': 'planned', 'planned_mm': '700'}, 'non_marker_reference'),
+            ('nonempty unknown placeholder', 'object_check_1', {'measured_mm': '700'}, 'non_marker_reference'),
+            ('partial manual selection', 'object_check_1', {'from_point': 'door:left'}, 'non_marker_reference'),
+        ]
+        for label, selected_id, update, reason in changes:
+            with self.subTest(label=label):
+                path = self.stock_measurement_sheet()
+                with path.open(encoding='utf-8', newline='') as stream:
+                    rows = list(csv.DictReader(stream))
+                next(row for row in rows if row['measurement_id'] == selected_id).update(update)
+                with path.open('w', encoding='utf-8', newline='') as stream:
+                    writer = csv.DictWriter(stream, fieldnames=measurements.FIELDS)
+                    writer.writeheader()
+                    writer.writerows(rows)
+                self.bind_measurement_export(path)
+                result = reporting.report(self.scene, self.cloud, self.settings, mesh_path=self.mesh)
+                self.assertEqual(result['measurements']['status'], 'attention_required')
+                row = next(row for row in result['measurements']['rows'] if row['measurement_id'] == selected_id)
+                self.assertEqual((row['check_status'], row['reason']), ('unverified', reason))
+
+    def test_selected_marker_failures_keep_attention_with_stock_background(self):
+        for failure in ('missing', 'duplicate', 'weak', 'outside'):
+            with self.subTest(failure=failure):
+                path = self.stock_measurement_sheet()
+                marker = self.data['structure'][-1]
+                if failure == 'missing':
+                    self.data['structure'].pop()
+                elif failure == 'duplicate':
+                    self.data['structure'].append({**deepcopy(marker), 'landmarkId': '99'})
+                elif failure == 'weak':
+                    marker['observations'] = [{'observationId': '30'}]
+                else:
+                    marker['X'][0] += .5
+                self.write(self.scene, self.data)
+                self.bind_measurement_export(path)
+                result = reporting.report(self.scene, self.cloud, self.settings, mesh_path=self.mesh, tolerance_mm=.1)
+                self.assertEqual(result['measurements']['status'], 'attention_required')
+                control = next(row for row in result['measurements']['rows'] if row['measurement_id'] == 'marker_check_2_3')
+                if failure == 'outside':
+                    self.assertEqual(control['check_status'], 'control_outside_tolerance')
+                    self.assertEqual(control['difference_mm'], .5)
+                else:
+                    self.assertEqual(control['check_status'], 'unverified')
+
     def test_applied_baseline_checks_actual_centers_even_with_fresh_receipt_hash(self):
         evidence = self.apply_scale_evidence()
         self.data['structure'][1]['X'] = [4, 0, 0]

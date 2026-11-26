@@ -85,10 +85,19 @@ headers; готовый PDF требует только PyMuPDF для раст�
 Комплект и его manifest остаются неизменными. **Агент**, не оператор, перед
 приёмом ответа создаёт отдельную рабочую форму и не перезаписывает старую:
 
+<!-- capture-working-copy:start -->
 ```bash
-test ! -e "$WORK/measurements.csv"
-cp "$WORK/capture-kit-02/measurements.csv" "$WORK/measurements.csv"
+if [ -e "$WORK/capture/measurements.csv" ] || [ -L "$WORK/capture/measurements.csv" ]; then
+  printf 'Сохранена существующая рабочая форма: %s\n' "$WORK/capture/measurements.csv"
+elif mkdir -p "$WORK/capture" &&
+     cp -n -- "$WORK/capture-kit-02/measurements.csv" "$WORK/capture/measurements.csv"; then
+  printf 'Создана рабочая форма: %s\n' "$WORK/capture/measurements.csv"
+else
+  printf 'Не удалось создать рабочую форму: %s\n' "$WORK/capture/measurements.csv" >&2
+  false
+fi
 ```
+<!-- capture-working-copy:end -->
 
 Оператору передаются PDF и placement.txt; он отвечает в чате. Агент вносит
 ответ, способ, источник и известную неопределённость в рабочую форму. Изменение
@@ -102,8 +111,12 @@ coreutils и системные библиотеки `libgl1 libglib2.0-0 libgom
 libxext6`. Запускать из корня репозитория в новом shell **без** `source
 Meshroom/env.sh`; `$MESHROOM_PYTHON` здесь не используется. Driver имеет свой
 Python с PyMuPDF, native detector получает только `ALICEVISION_ROOT` и библиотеки.
-Распаковать полный квалифицированный архив, проверив его SHA по
-[отчёту](reports/2026-11-24/capture-kit.md#выбор-рабочего-linux-детектора), и задать:
+URL и SHA полного CPU-архива брать из `CAPTURE_DETECTOR_URL` и
+`CAPTURE_DETECTOR_SHA256` в [существующем CI](../.github/workflows/capture-kit.yml):
+это единый источник настроек детектора. Квалификация текущей сборки — в
+[отчёте 26 ноября](reports/2026-11-26/cctag-distances.md); исторический архив
+из отчёта 24 ноября не подставлять вместо неё. После проверки SHA распаковать
+архив и задать:
 
 ```bash
 export WORK=/absolute/path/to/capture-work

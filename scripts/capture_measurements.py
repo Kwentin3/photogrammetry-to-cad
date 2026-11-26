@@ -29,6 +29,14 @@ def optional_number(text, field, row_id):
     return value
 
 
+def is_unselected_placeholder(row):
+    """Only reserved, empty unknown endpoints mean an optional unselected row."""
+    return (row['purpose'] in {'check', 'manual_parameter'} and row['status'] == 'unknown'
+            and all(row[key].startswith('REPLACE_') for key in ('from_point', 'to_point'))
+            and all(row[key] in (None, '') for key in (
+                'planned_mm', 'measured_mm', 'uncertainty_mm', 'method', 'confirmation_source')))
+
+
 def load_measurements(path):
     path = Path(path).resolve(strict=True)
     data = path.read_bytes()

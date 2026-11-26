@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import sys
 
+from capture_measurements import is_unselected_placeholder
+
 from check_marker_scale import (
     MarkerError, cctag_landmarks, identifier, markers_from_scene, number, read_json,
     scene_reconstructed_views, vector, verify_applied_baseline,
@@ -225,12 +227,14 @@ def pair_report(sheet, scene, scale, tolerance_mm=None):
                         else:
                             row['reason'] = 'non_control_reference'
         rows.append(row)
-    attention = sum(row['check_status'] in {'unverified', 'control_outside_tolerance'} for row in rows)
+    attention = sum(row['check_status'] == 'control_outside_tolerance' or (
+        row['check_status'] == 'unverified' and row['purpose'] != 'print_check'
+        and not is_unselected_placeholder(row)) for row in rows)
     return {'input': {'path': str(sheet['path']), 'sha256': sheet['sha256']},
             'status': 'attention_required' if attention else 'compared', 'rows': rows,
             'unverified_rows': sum(r['check_status'] == 'unverified' for r in rows),
             'result_tolerance_mm': tolerance_mm,
-            'scope': 'One scale pair checks numeric transfer; control pairs were not fitted. Input uncertainty is separate from result tolerance; no whole-scene physical accuracy claim.'}
+            'scope': 'One scale pair checks numeric transfer; control pairs were not fitted. Print checks and empty unselected placeholders remain visible but do not raise 3D-control attention. Input uncertainty is separate from result tolerance; no whole-scene physical accuracy claim.'}
 
 
 def markdown_table(result):
