@@ -376,7 +376,8 @@ frozen модули. Отредактировать копию JSON вне Git: 
 разрешаются относительно файла настроек; pipeline — standard или legacy.
 Пример задаёт threads8, DSPSIFT normal/normal, DepthMap downscale2 и лимиты Meshing.
 Это параметры малого опыта, не условия по имени объекта или обязательному числу
-кадров. Для сравнения сделать legacy.json с теми же входами и сопоставимыми nodes.
+кадров. Если нужен обоснованный fallback или сравнение, сделать legacy.json
+с теми же входами и сопоставимыми nodes; второй маршрут не обязателен.
 
 ```bash
 THREADS=$("$MESHROOM_PYTHON" - "$SETTINGS" <<'PY'
@@ -404,6 +405,12 @@ hard cap согласованный RSS-порог означает ручную
 
 Фотографии: flat capture/images, резкие перекрывающиеся виды неподвижного объекта
 с параллаксом. Посторонние подпапки, symlinks и неучтённые изображения отвергаются.
+До manifest просмотреть обзор набора и несколько оригиналов в полном разрешении:
+резкость, пересветы, общие детали соседних видов и охват нужных зон.
+Проверить W×H, Orientation и EXIF Model/LensModel/FocalLength/
+FocalLengthIn35mmFilm, зум и режимы: широкий формат не означает сверхширокий объектив.
+Сохранить оригиналы/метаданные; неполный EXIF или отсутствие камеры в sensor DB
+сами по себе не требуют пересъёмки. Regular/Smart к готовым фотографиям не относятся.
 
 ```bash
 "$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" manifest "$WORK/capture/images" \
@@ -480,6 +487,10 @@ setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/prepare-standard" 300 -
 
 Prepare проверяет manifest, применяет настройки **до native CameraInit**,
 загружает установленный template и сохраняет project.mg/cache/effective-settings.json.
+После CameraInit сверить предупреждения, фактические intrinsics и группировку
+кадров с реальными объективами, зумом и режимами: один объектив может давать
+разные intrinsics. Не назначать калибровку по догадке и не считать BA гарантией
+исправления любой начальной ошибки.
 Сохраняется весь шаблон, включая MeshFiltering, Texturing и CopyFiles;
 это не запускает их. `result_nodes` содержит реальные имена конечных узлов.
 Existing RUN не перезаписывается. От prepare до завершения входные настройки,
@@ -507,13 +518,75 @@ setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/sparse-standard" 900 --
   >"$WORK/jobs/sparse-standard-launch.log" 2>&1 </dev/null
 ```
 
-После sparse вызвать scale **даже при unknown**: он сохраняет native sparse JSON
-и scale-plan. При известной базе добавляет подтверждённое преобразование;
+После успешного sparse вызвать scale **даже при unknown**: он сохраняет
+`sparse-before.json` и scale-plan. Его structure отфильтрован до CCTag3;
+отсутствие обычных точек в этом JSON не означает пустую реконструкцию.
+При известной базе scale меняет граф, но **сам не вычисляет SfMTransform**;
 последующий native compute выполнит его как предка dense images.
 
 ```bash
 bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/scale-standard" 120 -- \
   taskset -c "$CPUS" "$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" scale "$RUN"
+```
+
+### Оценка sparse до dense
+
+До плотного расчёта выгрузить обычные точки и центры камер **из одного native
+sparse.output**. После scale это всё ещё сцена до преобразования, как и
+`sparse-before.json`; не смешивать её с уже преобразованными координатами.
+Путь и describerTypes взять из сохранённого графа, а не из первого UID/glob
+или исторического значения. Пример читает существующий runtime через тот же helper:
+
+```bash
+mapfile -t SPARSE_EXPORT < <("$MESHROOM_PYTHON" - "$REPO/scripts" "$RUN" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+import reconstruction as r
+_, e, g, _ = r.load(sys.argv[2])
+print(g.node(e['sparse_node']).output.value)
+owner = r.node(g, 'TracksBuilding' if e['settings']['pipeline']=='standard' else 'StructureFromMotion')
+print(','.join(owner.describerTypes.value))
+PY
+)
+SPARSE_NATIVE=${SPARSE_EXPORT[0]}; SPARSE_TYPES=${SPARSE_EXPORT[1]}
+bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/sparse-points-standard" 120 -- \
+  taskset -c "$CPUS" aliceVision_convertSfMFormat --input "$SPARSE_NATIVE" \
+  --output "$RUN/sparse-points.ply" --describerTypes "$SPARSE_TYPES" \
+  --views false --intrinsics false --extrinsics false --structure true --observations false
+bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/sparse-cameras-standard" 120 -- \
+  taskset -c "$CPUS" aliceVision_convertSfMFormat --input "$SPARSE_NATIVE" \
+  --output "$RUN/sparse-cameras.ply" --describerTypes "$SPARSE_TYPES" \
+  --views false --intrinsics false --extrinsics true --structure false --observations false
+```
+
+Для повторного экспорта выбрать новые outputs/JOB_DIR, сохранив прежние.
+Не опускать `--describerTypes`: в этой закреплённой версии пустое значение
+[очищает landmarks](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/software/convert/main_convertSfMFormat.cpp#L157).
+Native PLY с extrinsics содержит только центры views с действительными
+[poses и intrinsics](https://github.com/alicevision/AliceVision/blob/d012d05589b528dcf57a2a0c805c0a5709df8613/src/aliceVision/sfmDataIO/plyIO.cpp#L32).
+По `sparse-before.json` сопоставить viewId/имя кадра с существующим pose и валидным
+intrinsic, составить список зарегистрированных и выпавших кадров; все views не
+считать зарегистрированными. Для rig учитывать связанный pose/subpose.
+PLY не хранит имена и направления камер — их брать из JSON той же сцены.
+
+Открыть оба PLY вместе в Meshroom/CloudCompare, сверить с исходниками нужные зоны,
+связность охвата и правдоподобие формы. Выбрать подходящий обзор сверху и боковые
+виды, подписать направление и единицы. Метрический срез возможен лишь при
+установленных масштабе и уровне пола; при unknown использовать единицы сцены.
+Замкнутая траектория и универсальная доля зарегистрированных камер не требуются.
+Существующему mesh-helper не подавать фиктивную сетку ради раннего осмотра.
+
+В карточке выбрать действие: dense, адресная попытка или конкретный недостаток
+наблюдений. При пропуске зоны сначала проверить соседние оригиналы, рассмотренные
+пары и логи; разрыв графа сам по себе не доказывает необходимость досъёмки.
+Непроверенные подходящие пары можно добавить штатным сопоставлением; настройки
+и предел повторов выбирать по дефекту и бюджету, а не только по числу кадров.
+Если dense нужен лишь для диагностики фрагмента, обозначить это до запуска.
+
+После решения продолжить — вычислить dense images; при подготовленном scale
+нативный граф сначала выполнит нужный SfMTransform:
+
+```bash
 "$MESHROOM_PYTHON" "$REPO/scripts/reconstruction.py" verify "$RUN"
 setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/images-standard" 600 -- \
   taskset -c "$CPUS" "$MESHROOM_ROOT/meshroom_compute" "$PROJECT" --cache "$CACHE" --toNode "$IMAGES_NODE" \
@@ -561,9 +634,12 @@ Meshing UID-каталог в `meshing-output`, чтобы не потерять
 это упаковка файлов, не новый расчёт или проверка glTF конкретным просмотрщиком.
 Не выбирать первый попавшийся UID/glob.
 
-Повторить стадии Legacy с его SETTINGS/RUN и другими JOB_DIR. Сохранить отдельные
-outputs, время и ручные действия; сравнить восстановленные части, пропуски и
-искажения. Количество точек и smooth mesh не доказывают физическую точность.
+Legacy выбирать сразу для используемых CCTag3 или как обоснованный fallback
+после наблюдаемого отказа Standard; сравнение двух маршрутов выполнять только
+при явной задаче или конкретной неопределённости. Тогда использовать его
+SETTINGS/RUN и другие JOB_DIR, сохранить отдельные outputs, время и ручные
+действия; сравнить восстановленные части, пропуски и искажения.
+Количество точек и smooth mesh не доказывают физическую точность.
 
 ## Продолжить до фильтрации или текстур
 
