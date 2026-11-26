@@ -870,6 +870,9 @@ $reportArgs+=@('--mesh',"$runLocal/mesh.obj")
 if ($settings.scale.mode -in @('measured_baseline','marker_coords')) {
   $reportArgs+=@('--scale-evidence',"$runLocal/scale-evidence.json")
 }
+if ($settings.scale.measurements_file) {
+  $reportArgs+=@('--measurements',"$unpacked/capture/measurements.csv",'--table',"$runLocal/measurement-report.md")
+}
 & $python "$repo/scripts/reconstruction_report.py" @reportArgs
 if ($LASTEXITCODE -ne 0) { throw 'Reconstruction report failed' }
 ```
@@ -957,10 +960,62 @@ Legacy с масками, маски до SfM, turntable и две сторон�
 прочитать [сочетания](capture.md#метки-вместе-с-масками-и-движением-объекта);
 зависимости/ограничения — в [матрице](meshroom-modes.md).
 
+### Подтверждённые расстояния CCTag3
+
 По умолчанию scale.mode=unknown: произвольные SfM units, без физических мм.
-Для измеренной базы выбрать **Legacy**, включить cctag3 в FeatureExtraction и
-FeatureMatching и передать measured_baseline: два разных IDs 0..31, положительное
-distance, units mm/cm/m и measurement_source реального замера. Adapter вычисляет
+Для нового CCTag-пилота взять [готовый пример настроек](../configs/reconstruction-cctag.example.json):
+**Legacy**, `dspsift,cctag3` в FeatureExtraction/FeatureMatching/StructureFromMotion,
+масштаб из единственной рабочей формы. Первый опыт не требует квалификации Standard.
+Исходные мишени, схема и обычный ответ человека — по [памятке](operator.md).
+
+1. Выдать PDF и схему от генератора, сохранить выданные файлы неизменными.
+   Скопировать `measurements.csv` в частный `capture/measurements.csv` вне Git.
+2. Перенести ответ оператора в эту рабочую копию: `confirmed_nominal` означает
+   «заданная длина выставлена/проверена при установке», с `method` и
+   `confirmation_source` (дословный ответ/ссылка/дата). `measured` использует
+   фактическое `measured_mm`, включая отличие от плана. Остальное — `planned`
+   либо `unknown`; агент ничего не подтверждает за человека. Неизвестная
+   `uncertainty_mm` остаётся пустой, а не нулевой. PDF-проверка печати — отдельные
+   `print_check`; она не устанавливает расстояния между мишенями в комнате.
+3. В настройках оставить только
+   `"scale": {"mode": "measured_baseline", "measurements": "../capture/measurements.csv"}`.
+   Путь относительно settings JSON. `ids/distance/units/measurement_source`
+   рядом с `measurements` запрещены: их выводит общий CSV-reader.
+   Неподтверждённая масштабная строка останавливает `prepare` до native runtime.
+   Для сознательной работы без масштаба можно указать `mode=unknown` с той же
+   формой; плановые значения тогда не становятся миллиметрами.
+4. Выполнить обычные `manifest → prepare → native sparse → scale → native dense → export`
+   из разделов выше. `scale` только готовит граф; преобразование должен вычислить
+   native compute. `reconstruction.py verify RUN` сверяет SHA исходной формы,
+   как settings/изображений.
+   После изменения формы нужен новый run; не исправлять effective/scale evidence вручную.
+5. Сохранить рабочий CSV вместе с backup. `export` проверяет базу в post-transform
+   `scene.json` и сохраняет SHA фактически выданных scene/cloud/raw mesh в
+   effective и scale-evidence. Это привязка файлов к выводу экспортёра, а не
+   криптографическое доказательство происхождения произвольно созданной сцены.
+6. Сформировать JSON и таблицу по локальным копиям блоком «Локальный отчёт» выше.
+   Он добавляет `--measurements` и `--table` до вызова CLI, если effective
+   ссылается на рабочую форму. CSV должна быть сохранена в backup как
+   `capture/measurements.csv`. `--mesh` и `--scale-evidence` включены в пример;
+   для known-scale CSV mesh обязателен. `--tolerance-mm` добавить к аргументам
+   только при согласованном допуске результата.
+
+`--measurements` позволяет перенести byte-identical CSV с Linux на Windows без
+редактирования effective. Отчёт сверяет CSV SHA/смысл масштабной строки, applied
+baseline в actual scene и SHA scene/cloud/mesh. Подмена облака, единиц, сцены до
+масштаба или mesh даёт ошибку, а не известные миллиметры. Отсутствующие/повторные
+ID, менее двух наблюдений от восстановленных камер, неподтверждённые пары и
+ручные/печатные опоры показаны как «не проверено». Все строки сохраняются в JSON.
+Разность считается по native CCTag-центрам, а не углам объекта или выбранным
+вершинам mesh. Это проверка координатной системы выданной геометрии; она не
+доказывает точность всех поверхностей mesh. Контрольные пары не участвуют в масштабе.
+`status=reported` означает сформированный отчёт; смотреть `measurements.status`
+и каждую строку. Неопределённость входного расстояния, допуск результата и
+численный допуск переноса SfMTransform — три разные величины.
+
+Старый прямой ввод без CSV сохранён: measured_baseline, два разных IDs 0..31,
+положительное distance, units mm/cm/m и measurement_source подтверждённой длины.
+Для новых опытов предпочтителен один CSV. Adapter вычисляет
 отношение к native базе и передаёт scalar SfMTransform без смены углов/осей/начала.
 Положения меток и наблюдения должны быть однозначны. В Goal #6 native scalar
 проверен на отдельном синтетическом SfM; реальные видео имеют unknown scale.

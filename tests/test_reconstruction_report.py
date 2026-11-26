@@ -1,6 +1,7 @@
 """Native-scene and actual PLY contracts for reconstruction diagnostics."""
 
 from copy import deepcopy
+import csv
 import json
 from pathlib import Path
 import subprocess
@@ -15,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 try:
     import check_marker_scale as checker
     import reconstruction_report as reporting
+    import capture_measurements as measurements
 finally:
     sys.path.pop(0)
 
@@ -232,6 +234,197 @@ class ReconstructionReportTests(unittest.TestCase):
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("Output must differ", completed.stderr)
         self.assertEqual(self.scene.read_bytes(), original)
+
+    def measurement_sheet(self):
+        path = self.root / 'measurements.csv'
+        base = dict.fromkeys(measurements.FIELDS, '')
+        rows = []
+        for row_id, purpose, a, b, planned, actual, status in [
+            ('base', 'scale', 'cctag3:2:center', 'cctag3:5:center', '2', '', 'confirmed_nominal'),
+            ('control', 'check', 'cctag3:2:center', 'cctag3:7:center', '3', '2.5', 'measured'),
+            ('missing', 'check', 'cctag3:2:center', 'cctag3:9:center', '', '9', 'measured'),
+            ('weak', 'check', 'cctag3:2:center', 'cctag3:8:center', '', '1', 'measured'),
+            ('duplicate', 'check', 'cctag3:2:center', 'cctag3:6:center', '', '4', 'measured'),
+            ('plan', 'check', 'cctag3:5:center', 'cctag3:7:center', '17', '', 'planned'),
+            ('print', 'print_check', 'paper:left', 'paper:right', '100', '', 'planned'),
+            ('manual', 'manual_parameter', 'object:left', 'object:right', '', '4', 'measured'),
+        ]:
+            rows.append({**base, 'measurement_id': row_id, 'purpose': purpose,
+                         'from_point': a, 'to_point': b, 'planned_mm': planned,
+                         'measured_mm': actual, 'status': status, 'method': 'checked during installation',
+                         'confirmation_source': 'operator reply fixture'})
+        with path.open('w', encoding='utf-8', newline='') as stream:
+            writer = csv.DictWriter(stream, fieldnames=measurements.FIELDS)
+            writer.writeheader(); writer.writerows(rows)
+        for mid, center, observations in [(7, [0, 3, 0], [30, 31]),
+                                           (8, [0, 0, 1], [30, 32]),
+                                           (6, [4, 0, 0], [30, 31]),
+                                           (6, [0, 4, 0], [30, 31])]:
+            self.data['structure'].append({'landmarkId': str(100 + len(self.data['structure'])),
+                'descType': 'cctag3', 'color': [mid, 0, 0], 'X': center,
+                'observations': [{'observationId': str(v)} for v in observations]})
+        self.write(self.scene, self.data)
+        return path
+
+    def bind_measurement_export(self, path):
+        evidence = self.apply_scale_evidence()
+        request = measurements.confirmed_scale(measurements.load_measurements(path))
+        self.config['scale'] = {**request, 'applied_evidence': str(self.evidence)}
+        evidence['source'] = request
+        self.mesh = self.root / 'mesh.obj'
+        self.mesh.write_bytes(b'v 0 0 0\nv 1 0 0\nv 0 -1 0\nf 1 2 3\n')
+        binding = {key: reporting.artifact(value)['sha256']
+                   for key, value in [('scene', self.scene), ('cloud', self.cloud), ('mesh', self.mesh)]}
+        self.config['artifact_sha256'] = binding
+        self.config['mesh_export'] = {'sha256': binding['mesh']}
+        evidence['artifact_sha256'] = binding.copy()
+        self.write(self.settings, self.config)
+        self.write(self.evidence, evidence)
+
+    def test_applied_baseline_checks_actual_centers_even_with_fresh_receipt_hash(self):
+        evidence = self.apply_scale_evidence()
+        self.data['structure'][1]['X'] = [4, 0, 0]
+        numeric = checker.verify_applied_baseline(self.data, [2, 5], 2., 'changed scene')
+        self.assertFalse(numeric['passed'])
+        self.assertEqual(numeric['baseline_error'], 2.)
+        self.write(self.scene, self.data)
+        evidence['scene_sha256'] = reporting.artifact(self.scene)['sha256']
+        self.write(self.evidence, evidence)
+        with self.assertRaisesRegex(ValueError, 'Applied baseline differs in actual scene'):
+            reporting.verified_scale(self.config, reporting.artifact(self.scene))
+
+    def test_all_measurement_rows_and_independent_control_difference(self):
+        path = self.measurement_sheet()
+        self.bind_measurement_export(path)
+        result = reporting.report(self.scene, self.cloud, self.settings, mesh_path=self.mesh, tolerance_mm=.1)
+        rows = {row['measurement_id']: row for row in result['measurements']['rows']}
+        self.assertEqual(len(rows), 8)
+        self.assertEqual(rows['base']['check_status'], 'scale_transfer_verified')
+        self.assertEqual(rows['base']['model_mm'], 2.)
+        self.assertEqual(rows['control']['model_mm'], 3.)
+        self.assertEqual(rows['control']['difference_mm'], .5)
+        self.assertEqual(rows['control']['check_status'], 'control_outside_tolerance')
+        self.assertIsNone(rows['control']['uncertainty_mm'])
+        for key, reason in [('missing', 'missing_marker'), ('weak', 'insufficient_observations'),
+                            ('duplicate', 'ambiguous_marker'), ('plan', 'unconfirmed_distance'),
+                            ('print', 'non_marker_reference'), ('manual', 'non_marker_reference')]:
+            self.assertEqual(rows[key]['check_status'], 'unverified')
+            self.assertEqual(rows[key]['reason'], reason)
+        self.assertEqual(result['measurements']['status'], 'attention_required')
+        self.assertEqual(result['scale']['transform']['scale'], 2.)
+        table = reporting.markdown_table(result)
+        for key in rows:
+            self.assertIn(key + ' (', table)
+        self.assertIn('неизвестно', table)
+
+    def test_unknown_scale_keeps_csv_visible_without_model_mm(self):
+        path = self.measurement_sheet()
+        result = reporting.report(self.scene, self.cloud, self.settings, measurements_path=path)
+        self.assertEqual(result['scale']['units'], 'unknown')
+        self.assertEqual(len(result['measurements']['rows']), 8)
+        for row in result['measurements']['rows']:
+            self.assertIsNone(row['model_mm'])
+            self.assertIsNone(row['difference_mm'])
+            self.assertEqual(row['check_status'], 'unverified')
+        base = result['measurements']['rows'][0]
+        self.assertEqual(base['confirmed_mm'], 2.)
+        self.assertEqual(base['reason'], 'unknown_scale')
+
+    def test_relocated_csv_hash_and_scale_semantics_remain_bound(self):
+        path = self.measurement_sheet()
+        self.bind_measurement_export(path)
+        relocated = self.root / 'relocated.csv'
+        relocated.write_bytes(path.read_bytes())
+        self.config['scale']['measurements_file'] = '/root/original-run/measurements.csv'
+        self.write(self.settings, self.config)
+        result = reporting.report(self.scene, self.cloud, self.settings, measurements_path=relocated, mesh_path=self.mesh)
+        self.assertEqual(result['inputs']['measurements']['path'], str(relocated.resolve()))
+        relocated.write_bytes(relocated.read_bytes().replace(b'2.5', b'2.6'))
+        with self.assertRaisesRegex(ValueError, 'measurements_sha256'):
+            reporting.report(self.scene, self.cloud, self.settings, measurements_path=relocated)
+        relocated.write_bytes(path.read_bytes())
+        self.config['scale']['measurement_status'] = 'measured'
+        evidence = json.loads(self.evidence.read_text(encoding='utf-8'))
+        evidence['source']['measurement_status'] = 'measured'
+        self.write(self.settings, self.config); self.write(self.evidence, evidence)
+        with self.assertRaisesRegex(ValueError, 'measurement_status differs'):
+            reporting.report(self.scene, self.cloud, self.settings, measurements_path=relocated)
+
+    def test_known_csv_rejects_foreign_cloud_mesh_and_missing_export_owner(self):
+        path = self.measurement_sheet()
+        self.bind_measurement_export(path)
+        original = self.cloud.read_bytes()
+        self.cloud.write_bytes(original + b'\n')
+        with self.assertRaisesRegex(ValueError, 'artifact_sha256.*cloud'):
+            reporting.report(self.scene, self.cloud, self.settings, mesh_path=self.mesh)
+        self.cloud.write_bytes(original)
+        self.mesh.write_bytes(self.mesh.read_bytes() + b'# changed\n')
+        with self.assertRaisesRegex(ValueError, 'artifact_sha256.*mesh'):
+            reporting.report(self.scene, self.cloud, self.settings, mesh_path=self.mesh)
+        del self.config['artifact_sha256']
+        self.write(self.settings, self.config)
+        with self.assertRaisesRegex(ValueError, 'saved export artifact_sha256'):
+            reporting.report(self.scene, self.cloud, self.settings, mesh_path=self.mesh)
+
+    def test_cli_table_uses_actual_rows_and_protects_csv_input(self):
+        path = self.measurement_sheet()
+        self.bind_measurement_export(path)
+        table = self.root / 'report.md'
+        completed = self.cli(self.root / 'report.json', '--table', str(table), '--tolerance-mm', '.1', '--mesh', str(self.mesh))
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        self.assertIn('Контроль: вне заданного допуска', table.read_text(encoding='utf-8'))
+        before = path.read_bytes()
+        completed = self.cli(self.root / 'protected-report.json', '--measurements', str(path), '--table', str(path))
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn('Output must differ', completed.stderr)
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_actual_baseline_and_result_tolerance_are_not_nominal_or_input_uncertainty(self):
+        path = self.measurement_sheet()
+        with path.open(encoding='utf-8', newline='') as stream:
+            rows = list(csv.DictReader(stream))
+        rows[0].update(status='measured', measured_mm='2.5')  # Planned2 is not used.
+        rows[1]['uncertainty_mm'] = '99'
+        with path.open('w', encoding='utf-8', newline='') as stream:
+            writer = csv.DictWriter(stream, fieldnames=measurements.FIELDS)
+            writer.writeheader(); writer.writerows(rows)
+        self.data['structure'][1]['X'] = [2.5, 0, 0]
+        self.write(self.scene, self.data)
+        self.bind_measurement_export(path)
+        for tolerance, status in [(None, 'control_compared'), (.1, 'control_outside_tolerance'),
+                                   (.6, 'control_within_tolerance')]:
+            result = reporting.report(self.scene, self.cloud, self.settings, tolerance_mm=tolerance, mesh_path=self.mesh)
+            self.assertEqual(result['scale']['source']['distance'], 2.5)
+            self.assertEqual(result['measurements']['rows'][0]['model_mm'], 2.5)
+            control = result['measurements']['rows'][1]
+            self.assertEqual(control['uncertainty_mm'], 99.)
+            self.assertEqual(control['difference_mm'], .5)
+            self.assertEqual(control['check_status'], status)
+        for bad in (-1., float('nan'), float('inf')):
+            with self.assertRaises(ValueError):
+                reporting.report(self.scene, self.cloud, self.settings, tolerance_mm=bad)
+
+    def test_known_csv_requires_mesh_and_both_complete_export_bindings(self):
+        path = self.measurement_sheet()
+        self.bind_measurement_export(path)
+        with self.assertRaisesRegex(ValueError, 'requires actual --mesh'):
+            reporting.report(self.scene, self.cloud, self.settings)
+        for owner in ('settings', 'evidence'):
+            with self.subTest(owner=owner):
+                settings = deepcopy(self.config)
+                evidence = json.loads(self.evidence.read_text(encoding='utf-8'))
+                target = settings if owner == 'settings' else evidence
+                del target['artifact_sha256']['mesh']
+                self.write(self.settings, settings); self.write(self.evidence, evidence)
+                with self.assertRaisesRegex(ValueError, 'artifact_sha256.*mesh'):
+                    reporting.report(self.scene, self.cloud, self.settings, mesh_path=self.mesh)
+                self.write(self.settings, self.config)
+                self.bind_measurement_export(path)
+        result = reporting.report(self.scene, self.cloud, self.settings, mesh_path=self.mesh)
+        table = reporting.markdown_table(result)
+        self.assertIn('статус confirmed_nominal', table)
+        self.assertIn('checked during installation', table)
+        self.assertIn('operator reply fixture', table)
 
 
 if __name__ == "__main__":

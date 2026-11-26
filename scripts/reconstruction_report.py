@@ -13,7 +13,8 @@ from pathlib import Path
 import sys
 
 from check_marker_scale import (
-    cctag_landmarks, identifier, number, read_json, scene_reconstructed_views, vector,
+    MarkerError, cctag_landmarks, identifier, markers_from_scene, number, read_json,
+    scene_reconstructed_views, vector, verify_applied_baseline,
 )
 
 
@@ -125,9 +126,161 @@ def verified_scale(settings, scene_artifact, evidence_path=None):
     verification = evidence["verification"]
     if not isinstance(verification, dict):
         raise ValueError("Scale evidence verification must be an object")
+    if mode == 'measured_baseline':
+        actual = verify_applied_baseline(read_json(Path(scene_artifact['path'])), ids, distance,
+                                         'actual applied scene')
+        if not actual['passed']:
+            raise ValueError('Applied baseline differs in actual scene; scene SHA alone does not verify scale')
+        verification = {**verification, **actual}
     return {"mode": mode, "applied": True, "units": units, "scope": "native_scene",
             "evidence": evidence_artifact, "transform": transform,
-            "source": source, "verification": verification}
+            "source": source, "verification": verification,
+            "artifact_sha256": evidence.get('artifact_sha256', {})}
+
+
+def measurements_for_report(settings, scale, path=None):
+    """Read the same confirmed-distance owner as prepare, allowing relocation."""
+    request = settings.get('scale', {})
+    saved_path = request.get('measurements_file')
+    if path is None and not saved_path:
+        return None
+    from capture_measurements import confirmed_scale, load_measurements
+    if path is None:
+        path = absolute_file(saved_path, 'scale.measurements_file')
+    sheet = load_measurements(Path(path).resolve(strict=True))
+    expected = request.get('measurements_sha256')
+    if saved_path and not expected:
+        raise ValueError('Saved measurements need their measurements_sha256 binding')
+    if expected and sheet['sha256'] != expected:
+        raise ValueError('Measurements differ from saved measurements_sha256')
+    if scale['applied']:
+        if not expected:
+            raise ValueError('Known-scale measurements report requires saved measurements_sha256')
+        actual = confirmed_scale(sheet)
+        for key, value in actual.items():
+            if key == 'measurements_file':
+                continue  # Native saved path remains unchanged after local relocation.
+            if request.get(key) != value or scale['source'].get(key) != value:
+                raise ValueError(f'Measurements {key} differs from applied scale entry')
+    return sheet
+
+
+def verified_export_bindings(settings, scale, inputs):
+    """Use the existing export owner, rather than treating report hashes as proof."""
+    if scale['applied'] and 'mesh' not in inputs:
+        raise ValueError('Known-scale measurements report requires actual --mesh')
+    owners = [settings.get('artifact_sha256')]
+    if scale['applied']:
+        owners.append(scale.get('artifact_sha256'))
+    for binding in owners:
+        if not binding and not scale['applied']:
+            continue  # Unknown-scale legacy inputs remain reportable without mm.
+        if not isinstance(binding, dict):
+            raise ValueError('Measurements report needs saved export artifact_sha256 binding')
+        for key in ('scene', 'cloud', 'mesh'):
+            if key in inputs and binding.get(key) != inputs[key]['sha256']:
+                raise ValueError(f'Export artifact_sha256 does not match actual {key}')
+
+
+def pair_report(sheet, scene, scale, tolerance_mm=None):
+    """Join confirmed references to native centers; never refit a control pair."""
+    if tolerance_mm is not None:
+        tolerance_mm = number(tolerance_mm, 'result tolerance_mm')
+        if tolerance_mm < 0:
+            raise ValueError('Result tolerance_mm must be nonnegative')
+    units_to_mm = {'mm': 1., 'cm': 10., 'm': 1000.}
+    rows = []
+    for source in sheet['rows']:
+        row = {**source, 'model_mm': None, 'model_scene_units': None, 'difference_mm': None,
+               'absolute_difference_mm': None, 'result_tolerance_mm': tolerance_mm,
+               'check_status': 'unverified', 'reason': None}
+        ids = source.get('marker_ids')
+        if not ids:
+            row['reason'] = 'non_marker_reference'
+        else:
+            try:
+                observed = markers_from_scene(scene, ids, 'reported actual scene')
+            except MarkerError as error:
+                row.update(reason=error.code, detail=str(error))
+            except ValueError as error:
+                row.update(reason='invalid_marker_data', detail=str(error))
+            else:
+                row['observed_markers'] = observed['markers']
+                row['model_scene_units'] = observed['distance']
+                if not scale['applied']:
+                    row['reason'] = 'unknown_scale'
+                else:
+                    row['model_mm'] = observed['distance'] * units_to_mm[scale['units']]
+                    if source.get('confirmed_mm') is None:
+                        row['reason'] = 'unconfirmed_distance'
+                    else:
+                        delta = row['model_mm'] - source['confirmed_mm']
+                        row.update(difference_mm=delta, absolute_difference_mm=abs(delta))
+                        if source['purpose'] == 'scale':
+                            row['check_status'] = 'scale_transfer_verified'
+                        elif source['purpose'] == 'check':
+                            row['check_status'] = ('control_compared' if tolerance_mm is None
+                                                   else 'control_within_tolerance' if abs(delta) <= tolerance_mm
+                                                   else 'control_outside_tolerance')
+                        else:
+                            row['reason'] = 'non_control_reference'
+        rows.append(row)
+    attention = sum(row['check_status'] in {'unverified', 'control_outside_tolerance'} for row in rows)
+    return {'input': {'path': str(sheet['path']), 'sha256': sheet['sha256']},
+            'status': 'attention_required' if attention else 'compared', 'rows': rows,
+            'unverified_rows': sum(r['check_status'] == 'unverified' for r in rows),
+            'result_tolerance_mm': tolerance_mm,
+            'scope': 'One scale pair checks numeric transfer; control pairs were not fitted. Input uncertainty is separate from result tolerance; no whole-scene physical accuracy claim.'}
+
+
+def markdown_table(result):
+    """Human view of exactly the reported rows, including unverified references."""
+    if result.get('status') != 'reported':
+        return '# Отчёт расстояний\n\nОшибка: ' + str(result.get('error', 'unknown')) + '\n'
+    measurement = result.get('measurements')
+    if measurement is None:
+        return '# Отчёт расстояний\n\nРабочая форма расстояний не передана.\n'
+    def cell(value):
+        if value is None:
+            return 'неизвестно'
+        if isinstance(value, float):
+            return f'{value:.6g}'
+        return str(value).replace('|', '\\|').replace('\r', ' ').replace('\n', ' ')
+    lines = ['# Отчёт расстояний', '',
+             'Модель в мм — только после проверенного применения масштаба. Δ = модель − подтверждённая длина.',
+             'Численный перенос масштабной пары не подтверждает физическую точность. Контрольные пары не использованы для подгонки.', '',
+             '| Пара / роль | План, мм | Подтверждено, мм | Модель, мм | Δ, мм | Неопределённость входа, мм | Допуск результата, мм | Состояние |',
+             '|---|---:|---:|---:|---:|---:|---:|---|']
+    for row in measurement['rows']:
+        role = {'scale': 'масштаб', 'check': 'контроль', 'print_check': 'печать',
+                'manual_parameter': 'ручной параметр'}.get(row['purpose'], row['purpose'])
+        endpoints = (f"ID{row['marker_ids'][0]} — ID{row['marker_ids'][1]}" if row.get('marker_ids')
+                     else f"{row['from_point']} — {row['to_point']}")
+        label = f"{row['measurement_id']} ({role}): {endpoints}"
+        states = {'unverified': 'Не проверено', 'scale_transfer_verified': 'Масштаб численно применён',
+                  'control_compared': 'Контроль: разница показана, допуск не задан',
+                  'control_within_tolerance': 'Контроль: в заданном допуске',
+                  'control_outside_tolerance': 'Контроль: вне заданного допуска'}
+        reasons = {'non_marker_reference': 'нет автоматической 3D-точки для ручной/печатной опоры',
+                   'missing_marker': 'метка отсутствует', 'ambiguous_marker': 'повторяющийся ID метки',
+                   'insufficient_observations': 'недостаточно наблюдений от восстановленных камер',
+                   'invalid_baseline': 'некорректная 3D-база', 'invalid_marker_data': 'некорректные данные метки',
+                   'unknown_scale': 'масштаб неизвестен', 'unconfirmed_distance': 'расстояние не подтверждено',
+                   'non_control_reference': 'эта строка не является контрольной парой'}
+        state = states.get(row['check_status'], row['check_status'])
+        if row.get('reason'):
+            state += ': ' + reasons.get(row['reason'], row['reason'])
+        lines.append('| ' + ' | '.join(cell(v) for v in (label, row.get('planned_mm'),
+                     row.get('confirmed_mm'), row['model_mm'], row['difference_mm'],
+                     row.get('uncertainty_mm'), row['result_tolerance_mm'], state)) + ' |')
+    lines.extend(['', 'Подтверждения из той же рабочей формы:', ''])
+    for row in measurement['rows']:
+        lines.append(f"- {cell(row['measurement_id'])}: статус {cell(row['status'])}; "
+                     f"способ: {cell(row.get('method') or None)}; "
+                     f"источник подтверждения: {cell(row.get('confirmation_source') or None)}.")
+    lines.extend(['', f"Форма: {cell(measurement['input']['path'])}",
+                  f"SHA-256: {measurement['input']['sha256']}"])
+    return '\n'.join(lines) + '\n'
 
 
 def cloud_summary(path):
@@ -201,7 +354,10 @@ def mesh_summary(path, cloud, scale):
     return result
 
 
-def report(scene_path, cloud_path, settings_path, manifest_path=None, scale_evidence_path=None, mesh_path=None):
+def report(scene_path, cloud_path, settings_path, manifest_path=None, scale_evidence_path=None, mesh_path=None,
+           measurements_path=None, tolerance_mm=None):
+    if tolerance_mm is not None and number(tolerance_mm, 'result tolerance_mm') < 0:
+        raise ValueError('Result tolerance_mm must be nonnegative')
     inputs = {"scene": artifact(scene_path), "cloud": artifact(cloud_path),
               "settings": artifact(settings_path)}
     settings = read_json(settings_path)
@@ -213,16 +369,24 @@ def report(scene_path, cloud_path, settings_path, manifest_path=None, scale_evid
         raise ValueError("Input manifest does not match settings.input_manifest_sha256")
     # Validate scale before importing Open3D or reading the potentially large cloud.
     scale = verified_scale(settings, inputs["scene"], scale_evidence_path)
-    scene = scene_summary(read_json(scene_path))
+    actual_scene = read_json(scene_path)
+    sheet = measurements_for_report(settings, scale, measurements_path)
+    if mesh_path is not None:
+        inputs['mesh'] = artifact(mesh_path)
+    if sheet is not None:
+        inputs['measurements'] = artifact(Path(sheet['path']))
+        verified_export_bindings(settings, scale, inputs)
+    scene = scene_summary(actual_scene)
     result = {"schema_version": 1, "status": "reported",
               "runtime": settings.get("runtime", {}), "inputs": inputs,
               "scene": scene, "scale": scale, "cloud": cloud_summary(cloud_path)}
     if mesh_path is not None:
-        inputs['mesh'] = artifact(mesh_path)
         binding = settings.get('mesh_export')
         if binding and binding['sha256'] != inputs['mesh']['sha256']:
             raise ValueError('Mesh differs from saved native export SHA-256')
         result['mesh'] = mesh_summary(mesh_path, result['cloud'], scale)
+    if sheet is not None:
+        result['measurements'] = pair_report(sheet, actual_scene, scale, tolerance_mm)
     return result
 
 
@@ -238,23 +402,30 @@ def main():
     parser.add_argument("--scale-evidence", type=Path,
                         help="Explicit local copy of applied scale evidence; preserve scene and scale binding")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument('--measurements', type=Path, help='Same measurements CSV, optionally relocated with its saved SHA binding')
+    parser.add_argument('--table', type=Path, help='Optional readable Markdown table of every measurement row')
+    parser.add_argument('--tolerance-mm', type=float, help='Optional result tolerance, separate from input uncertainty/numerical transfer')
     args = parser.parse_args()
     output = args.output.resolve()
     checkout = Path(__file__).resolve().parents[1]
-    if output == checkout or checkout in output.parents:
+    table = args.table.resolve() if args.table else None
+    outputs = {output} | ({table} if table else set())
+    if any(p == checkout or checkout in p.parents for p in outputs):
         parser.error("Write reconstruction evidence outside the source checkout")
     protected = {args.scene.resolve(), args.cloud.resolve(), args.settings.resolve()}
-    protected.update(path.resolve() for path in (args.manifest, args.scale_evidence, args.mesh) if path is not None)
-    if output in protected:
+    protected.update(path.resolve() for path in (args.manifest, args.scale_evidence, args.mesh, args.measurements) if path is not None)
+    if outputs & protected or table == output:
         parser.error("Output must differ from every input and scale evidence artifact")
     try:
         settings = read_json(args.settings)
-        for value in (settings.get("input_manifest"), settings.get("scale", {}).get("applied_evidence")):
+        for value in (settings.get("input_manifest"), settings.get("scale", {}).get("applied_evidence"),
+                      settings.get('scale', {}).get('measurements_file')):
             if isinstance(value, str) and value:
                 protected.add(Path(value).resolve())
-        if output in protected:
+        if outputs & protected:
             parser.error("Output must differ from every input and scale evidence artifact")
-        result = report(args.scene, args.cloud, args.settings, args.manifest, args.scale_evidence, args.mesh)
+        result = report(args.scene, args.cloud, args.settings, args.manifest, args.scale_evidence, args.mesh,
+                        args.measurements, args.tolerance_mm)
     except (ValueError, KeyError, TypeError, AttributeError, OverflowError, OSError, RuntimeError) as error:
         result = {"schema_version": 1, "status": "error", "error": str(error)}
     result["output_file"] = str(output)
@@ -263,6 +434,9 @@ def main():
     output.write_text(text, encoding="utf-8")
     if json.loads(output.read_text(encoding="utf-8")) != result:
         raise ValueError("Report JSON readback differs")
+    if table is not None:
+        table.parent.mkdir(parents=True, exist_ok=True)
+        table.write_text(markdown_table(result), encoding='utf-8')
     print(text, end="")
     return 0 if result["status"] == "reported" else 1
 

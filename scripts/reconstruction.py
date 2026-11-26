@@ -14,7 +14,8 @@ import shutil
 import subprocess
 
 from fetch_dataset import check_input_entries
-from check_marker_scale import markers_from_scene
+from check_marker_scale import markers_from_scene, verify_applied_baseline
+from capture_measurements import confirmed_scale, load_measurements
 
 REPO = Path(__file__).resolve().parents[1]
 IDENTITY = [1., 0., 0., 0., 1., 0., 0., 0., 1.]
@@ -241,6 +242,27 @@ def camera_mask_views(camera):
     return views
 
 
+def resolve_scale_request(request, base):
+    """Resolve the working sheet once; manual numbers are the existing alternative."""
+    if not isinstance(request, dict):
+        raise ValueError('scale must be an object')
+    if 'measurements' not in request:
+        return dict(request)
+    if set(request) != {'mode', 'measurements'}:
+        raise ValueError('Use the measurement sheet or manual scale fields, not both')
+    if request['mode'] not in ('unknown', 'measured_baseline'):
+        raise ValueError('Distance sheets support unknown or measured_baseline scale')
+    filename = request['measurements']
+    if not isinstance(filename, str) or not filename.strip():
+        raise ValueError('scale.measurements must name the working CSV')
+    path = outside(Path(base) / filename).resolve(strict=True)
+    sheet = load_measurements(path)
+    if request['mode'] == 'unknown':
+        return {'mode': 'unknown', 'measurements_file': sheet['path'],
+                'measurements_sha256': sheet['sha256']}
+    return confirmed_scale(sheet)
+
+
 def verify_run_inputs(run):
     """Check saved input bindings without importing Meshroom or changing the run."""
     root = outside(run).resolve(strict=True)
@@ -249,6 +271,12 @@ def verify_run_inputs(run):
     config_path = Path(effective['settings_file'])
     if sha(config_path) != effective['settings_sha256']:
         raise ValueError('Settings file changed; create a new run')
+    if 'measurements' in config.get('scale', {}):
+        current_scale = resolve_scale_request(config['scale'], config_path.parent)
+        saved_scale = {key: value for key, value in effective['scale'].items()
+                       if key != 'applied_evidence'}
+        if current_scale != saved_scale:
+            raise ValueError('Confirmed measurement sheet changed; preserve this run and create a new one')
     images = (config_path.parent / config['images']).resolve(strict=True)
     verify_images(images, Path(effective['input_manifest']))
     if sha(effective['input_manifest']) != effective['input_manifest_sha256']:
@@ -292,7 +320,7 @@ def prepare(args):
     threads = config['resources']['threads']
     if isinstance(threads, bool) or not isinstance(threads, int) or threads < 1:
         raise ValueError('resources.threads must be a positive integer')
-    scale = config.get('scale', {'mode': 'unknown'})
+    scale = resolve_scale_request(config.get('scale', {'mode': 'unknown'}), base)
     if scale['mode'] not in ('unknown', 'measured_baseline', 'marker_coords'):
         raise ValueError('Invalid physical scale mode')
     if scale['mode'] == 'marker_coords':
@@ -435,17 +463,17 @@ def export(args):
     mesh = save_native_mesh(meshing.outputMesh.value, root)
     convert(source, scene, 'markers')
     convert(dense, cloud, 'cloud')
+    artifact_sha256 = {'scene': sha(scene), 'cloud': sha(cloud), 'mesh': mesh['sha256']}
     if plan['mode'] != 'unknown':
         request = plan['source']
-        after = markers_from_scene(read(scene), request['ids'], 'scaled')
-        error = abs(after['distance'] - request['distance'])
-        tolerance = 1e-6 + 1e-8 * request['distance']
-        if error > tolerance or any(a['reconstructed_view_ids'] != b['reconstructed_view_ids']
+        check = verify_applied_baseline(read(scene), request['ids'], request['distance'], 'scaled')
+        after = check['after']
+        if not check['passed'] or any(a['reconstructed_view_ids'] != b['reconstructed_view_ids']
                                    for a, b in zip(plan['before']['markers'], after['markers'])):
             raise ValueError('Native scale verification failed; exports are preserved for diagnosis')
         evidence = {**plan, 'status': 'passed', 'applied': True, 'scene_sha256': sha(scene),
-                    'verification': {'after': after, 'baseline_error': error, 'numeric_tolerance': tolerance,
-                                     'scope': 'numerical transfer, not physical capture accuracy'}}
+                    'artifact_sha256': artifact_sha256,
+                    'verification': {key: value for key, value in check.items() if key != 'passed'}}
         evidence_path = root / 'scale-evidence.json'
         write(evidence_path, evidence)
         effective['scale']['applied_evidence'] = str(evidence_path)
@@ -453,6 +481,7 @@ def export(args):
                               'native_scene': str(source), 'native_dense': str(dense),
                               'mesh': mesh['path'], 'native_mesh': mesh['native_path']}
     effective['mesh_export'] = mesh
+    effective['artifact_sha256'] = artifact_sha256
     write(root / 'effective-settings.json', effective)
 
 

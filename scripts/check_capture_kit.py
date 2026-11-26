@@ -77,6 +77,10 @@ def prepare_inputs(args, output):
             raise ValueError("PDF differs from the delivered manifest")
         if sha256(kit / "measurements.csv") != manifest["measurements_sha256"]:
             raise ValueError("Measurements template differs from the delivered manifest")
+        for filename, field in (("placement.txt", "placement_sha256"),
+                                ("placement-plan.csv", "placement_plan_sha256")):
+            if field in manifest and sha256(kit / filename) != manifest[field]:
+                raise ValueError(f"{filename} differs from the delivered manifest")
         with fitz.open(pdf) as document:
             if len(document) != len(manifest["pages"]):
                 raise ValueError("PDF page count differs from manifest")

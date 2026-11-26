@@ -10,3 +10,4 @@ examples/goal-4/**/*.step binary
 /templates/capture-kit/*.pdf binary
 /templates/capture-kit/*.csv text eol=lf
 /templates/capture-kit/*.json text eol=lf
+/templates/capture-kit/*.txt text eol=lf

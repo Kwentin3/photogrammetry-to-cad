@@ -11,7 +11,7 @@
     210.0,
     297.0
   ],
-  "outer_diameter_mm": 100,
+  "outer_diameter_mm": 100.0,
   "source_revision": "71021443af3f7946e8e9025a37634b57e7aad77d",
   "source_base": "https://raw.githubusercontent.com/alicevision/CCTag/71021443af3f7946e8e9025a37634b57e7aad77d/markersToPrint/generators/",
   "source_sha256": {
@@ -83,8 +83,10 @@
     "svglib": "1.6.0",
     "svgwrite": "1.4.3"
   },
-  "pdf_sha256": "40c1f4cff6c056eb171c73f81b0ced9dbf8751a13f318cfad7bc2a4cd5598801",
-  "measurements_sha256": "02e9c603174feff308c5570c513fc69e17a4112936aa7f94f03810b2bbda98c7",
+  "pdf_sha256": "c0ed1109af435bc75317db87a5e0e70f2379036d973f1db03a415059a1c24198",
+  "measurements_sha256": "447b4b55fbd36dc62efe7ceacaa39d664f0de25e24e2a5b902f82c02a9412fa1",
+  "placement_sha256": "14f156c09b8dfa735fe9782a6cbfee54446aed979dea6dda9b6cf336aa3638dd",
   "physical_print_validated": false,
-  "metric_capture_validated": false
+  "metric_capture_validated": false,
+  "placement_plan_sha256": "ea65cb7ee4f65f391b9f25d11e8f8d9e6e5d6dc0eb1f41eb4e02a0b677a7a4c3"
 }
