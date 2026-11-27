@@ -488,8 +488,16 @@ setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/prepare-standard" 300 -
   >"$WORK/jobs/prepare-standard-launch.log" 2>&1 </dev/null
 ```
 
-Prepare проверяет manifest, применяет настройки **до native CameraInit**,
-загружает установленный template и сохраняет project.mg/cache/effective-settings.json.
+Prepare проверяет manifest, загружает native template и сохраняет
+project.mg/cache/effective-settings.json. Верхние параметры CameraInit применяются
+до initialize; `intrinsics` и `viewpoints`, которые initialize пересоздаёт, —
+после него. Частичная правка группы сохраняет её остальные поля. Пути viewpoint
+должны оставаться теми же проверенными изображениями из manifest; новая съёмка
+требует нового входа. Связанные значения проверяются после всех изменений графа,
+поэтому согласованный JSON не зависит от порядка ключей и не разрывает links.
+Конфликт с обязательными `resources.threads`/`masks` отклоняется с объяснением;
+согласуй запрос в одном месте, не рассчитывай на тихое переопределение.
+Пример выбора и чтения реальных результатов — [камера и SfM](camera-sfm.md).
 После CameraInit сверить предупреждения, фактические intrinsics и группировку
 кадров с реальными объективами, зумом и режимами: один объектив может давать
 разные intrinsics. Не назначать калибровку по догадке и не считать BA гарантией
