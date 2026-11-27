@@ -97,14 +97,93 @@ def init_runtime(root):
     return graph, expected
 
 
-def settings(node, values):
-    for name, value in values.items():
+def _setting_attribute(node, name):
+    try:
         attr = node.attribute(name)
-        if attr.isLink:
-            if attr.value != value:
-                raise ValueError(f'Conflicting linked setting: {node.name}.{name}')
-        else:
-            attr.value = value
+    except (KeyError, AttributeError) as error:
+        raise ValueError(f'Unsupported setting: {node.name}.{name}') from error
+    if attr is None:
+        raise ValueError(f'Unsupported setting: {node.name}.{name}')
+    return attr
+
+
+def _setting_has_links(attr):
+    return (attr.isLink or getattr(attr, 'hasAnyInputLinks', False) or getattr(attr, 'hasAnyOutputLinks', False)
+            or any(_setting_has_links(child) for child in getattr(attr, 'flatStaticChildren', ())))
+
+
+def _set_setting(attr, value, label, linked):
+    if attr.isLink:
+        linked.append((attr, value, label))
+    elif isinstance(value, dict) and callable(getattr(attr, 'childAttribute', None)):
+        for key, child_value in value.items():
+            child = attr.childAttribute(key)
+            if child is None:
+                raise ValueError(f'Unsupported setting: {label}.{key}')
+            _set_setting(child, child_value, f'{label}.{key}', linked)
+    elif isinstance(value, list) and callable(getattr(attr, 'at', None)) and (
+            any(_setting_has_links(child) for child in attr)
+            or (len(attr) == len(value) and all(isinstance(v, dict) and
+                callable(getattr(attr.at(i), 'childAttribute', None)) for i, v in enumerate(value)))):
+        # Native ListAttribute.value replaces children and removes their edges.
+        # Keep linked children and generated fields in partial Group updates.
+        # Resizing a linked list requires an explicit native graph edit.
+        if len(attr) != len(value):
+            raise ValueError(f'Cannot resize linked list setting without changing native edges: {label}')
+        for index, child_value in enumerate(value):
+            _set_setting(attr.at(index), child_value, f'{label}[{index}]', linked)
+    else:
+        try:
+            attr.value = value  # Native descriptors own validation and conversion.
+        except (ValueError, TypeError, AttributeError) as error:
+            raise ValueError(f'Unsupported value for {label}: {error}') from error
+
+
+def _setting_matches(attr, value, label):
+    while attr.isLink:
+        attr = attr.inputLink
+    if isinstance(value, dict) and callable(getattr(attr, 'childAttribute', None)):
+        for key, child_value in value.items():
+            child = attr.childAttribute(key)
+            if child is None:
+                raise ValueError(f'Unsupported setting: {label}.{key}')
+            if not _setting_matches(child, child_value, f'{label}.{key}'):
+                return False
+        return True
+    if isinstance(value, list) and callable(getattr(attr, 'at', None)):
+        return len(attr) == len(value) and all(
+            _setting_matches(attr.at(index), child_value, f'{label}[{index}]')
+            for index, child_value in enumerate(value))
+    validate = getattr(attr, 'validateValue', None)
+    expected = validate(value) if callable(validate) else value
+    return attr.value == expected
+
+
+def _check_linked_settings(linked):
+    for attr, value, label in linked:
+        if not _setting_matches(attr, value, label):
+            raise ValueError(f'Conflicting linked setting after native settings: {label}')
+
+
+def settings(node, values, linked=None):
+    pending = [] if linked is None else linked
+    for name, value in values.items():
+        _set_setting(_setting_attribute(node, name), value, f'{node.name}.{name}', pending)
+    if linked is None:
+        _check_linked_settings(pending)
+
+
+def _required_settings(target, values, overrides, origin, linked):
+    explicit = overrides.get(target.name, {})
+    for name, value in values.items():
+        if name in explicit:
+            attr = _setting_attribute(target, name)
+            validate = getattr(attr, 'validateValue', None)
+            requested = validate(explicit[name]) if callable(validate) else explicit[name]
+            required = validate(value) if callable(validate) else value
+            if requested != required:
+                raise ValueError(f'Conflicting setting {target.name}.{name}: {origin} requires {value!r}, nodes requests {explicit[name]!r}')
+    settings(target, values, linked)
 
 
 def node(graph, kind):
@@ -120,13 +199,18 @@ def result_nodes(graph):
     return {key: node(graph, kind).name for key, kind in kinds.items()}
 
 
-def configure_standard_transform(graph, overrides):
+def configure_standard_transform(graph, overrides, linked=None):
     transform = node(graph, 'SfMTransform')
     # Preserve the accepted identity default, while honoring explicit native settings.
     values = {'method': 'transformation', 'transformation': '', 'scale': 1.,
               'applyScale': True, 'applyRotation': False, 'applyTranslation': False}
-    values.update(overrides.get(transform.name, {}))
-    settings(transform, values)
+    requested = overrides.get(transform.name, {})
+    values.update(requested)
+    if any(key == 'manualTransform' or key.startswith('manualTransform.')
+           for key in requested) and values['method'] != 'manual':
+        raise ValueError(f'{transform.name}.manualTransform requires native method=manual; '
+                         f'requested method={values["method"]!r}')
+    settings(transform, values, linked)
 
 
 def save_native_mesh(source, root):
@@ -168,16 +252,52 @@ def preflight_masks(base, masks):
     return folder, extension
 
 
-def configure_masks(graph, pipeline, masks, folder, extension):
+def configure_masks(graph, pipeline, masks, folder, extension, overrides=None, linked=None):
+    overrides = overrides or {}
     if masks.get('features', True):
-        settings(node(graph, 'FeatureExtraction'), {
-            'masksFolder': str(folder), 'maskExtension': extension, 'maskInvert': False})
+        _required_settings(node(graph, 'FeatureExtraction'), {
+            'masksFolder': str(folder), 'maskExtension': extension, 'maskInvert': False},
+            overrides, 'masks', linked)
     dense = node(graph, 'ExportImages' if pipeline == 'standard' else 'PrepareDenseScene')
     values = {'masksFolders': [str(folder)], 'maskExtension': extension}
     if pipeline == 'legacy':
         # The masked dense route requires alpha and native camera metadata.
         values.update(outputFileType='exr', saveMetadata=True)
-    settings(dense, values)
+    _required_settings(dense, values, overrides, 'masks', linked)
+
+
+def configure_nodes(graph, pipeline, overrides, threads, masks, mask_input, image_paths):
+    """Order native setters/initialize; native attributes and graph keep meaning."""
+    camera = node(graph, 'CameraInit')
+    pending = []
+    # Native CameraInit.initialize resets these two collections, not its upper parameters.
+    after_initialize = {key: value for key, value in overrides.get(camera.name, {}).items()
+                        if key in ('intrinsics', 'viewpoints')}
+    for name, values in overrides.items():
+        before = ({key: value for key, value in values.items() if key not in after_initialize}
+                  if name == camera.name else values)
+        settings(graph.node(name), before, pending)
+    _required_settings(node(graph, 'FeatureExtraction'), {'maxThreads': threads},
+                       overrides, 'resources.threads', pending)
+    if pipeline == 'standard':
+        configure_standard_transform(graph, overrides, pending)
+    if masks:
+        configure_masks(graph, pipeline, masks, *mask_input, overrides=overrides, linked=pending)
+    camera.nodeDesc.initialize(camera, image_paths, [])
+    settings(camera, after_initialize, pending)
+    return camera, pending
+
+
+def verify_camera_inputs(camera, image_paths):
+    """Grouping/metadata may change; the wrapped verified capture may not."""
+    actual = [Path(point.path.value).resolve() for point in camera.viewpoints]
+    expected = {Path(path).resolve() for path in image_paths}
+    if len(actual) != len(image_paths) or set(actual) != expected:
+        missing = sorted(str(path) for path in expected - set(actual))
+        unexpected = sorted(str(path) for path in set(actual) - expected)
+        raise ValueError(f'CameraInit viewpoints changed verified input images: '
+                         f'expected count={len(image_paths)}, actual count={len(actual)}, '
+                         f'missing={missing}, unexpected={unexpected}')
 
 
 def mask_files(folder, extension, views):
@@ -344,18 +464,12 @@ def prepare(args):
     with module.GraphModification(graph):
         graph.initFromTemplate(str(template), keepOutputNodes=True)
         # Preserve the template. Native --toNode selects the computation endpoint.
-        for name, values in config.get('nodes', {}).items():
-            settings(graph.node(name), values)
-        settings(node(graph, 'FeatureExtraction'), {'maxThreads': threads})
-        if pipeline == 'standard':
-            configure_standard_transform(graph, config.get('nodes', {}))
-        if masks:
-            configure_masks(graph, pipeline, masks, *mask_input)
-        camera = node(graph, 'CameraInit')
-        # All initialization-affecting settings, including FOV, are already set.
-        camera.nodeDesc.initialize(camera, [str(images / item['name']) for item in files], [])
-    if len(camera.viewpoints) != len(files):
-        raise ValueError('CameraInit did not admit every verified input image')
+        camera, linked = configure_nodes(graph, pipeline, config.get('nodes', {}), threads,
+                                         masks, mask_input, [str(images / item['name']) for item in files])
+    # GraphModification has now updated native outputs/UIDs; linked expectations
+    # see all requested source values, independent of JSON insertion order.
+    _check_linked_settings(linked)
+    verify_camera_inputs(camera, [str(images / item['name']) for item in files])
     if any(item.isCompatibilityNode for item in graph.nodes):
         raise ValueError('Native template contains compatibility nodes')
     mask_inputs = (validate_masks(*mask_input, camera_mask_views(camera)) if masks else None)
@@ -414,7 +528,12 @@ def scale(args):
     before = root / 'sparse-before.json'
     convert(sparse.output.value, before, 'markers')
     if request['mode'] == 'unknown':
-        plan = {'mode': 'unknown', 'transform': {'scale': 1., 'rotation': IDENTITY, 'translation': [0., 0., 0.]}}
+        transforms = [item for item in graph.nodes if item.nodeType == 'SfMTransform']
+        # Unknown physical units do not imply an identity orientation or scale.
+        # The native consumer owns the resulting matrix; these are prepared inputs.
+        plan = {'mode': 'unknown', 'transform': None,
+                'native_transforms': [{'node': item.name, 'inputs': item.toDict()['inputs'],
+                                       'status': 'prepared_not_computed'} for item in transforms]}
     else:
         if request['units'] not in ('mm', 'cm', 'm'):
             raise ValueError('Explicit scale units are required')
