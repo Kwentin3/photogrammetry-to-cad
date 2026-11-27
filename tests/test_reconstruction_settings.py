@@ -93,7 +93,16 @@ class StoredNode:
                       for key, value in attrs.items()}
 
     def attribute(self, name):
-        return self.attrs[name]
+        # Native GroupAttribute dot paths resolve to the same stored child.
+        parts = name.split('.')
+        attr = self.attrs[parts[0]]
+        for part in parts[1:]:
+            if not isinstance(attr, StoredGroup):
+                raise KeyError(name)
+            attr = attr.childAttribute(part)
+            if attr is None:
+                raise KeyError(name)
+        return attr
 
     def __getattr__(self, name):
         try:
@@ -129,7 +138,8 @@ class StoredGraph:
                            masksFolders=[], maskExtension='exr', outputFileType='jpg', saveMetadata=False)
         transform = StoredNode('SfMTransform', method='auto_from_cameras', transformation='', scale=1.,
                                applyScale=True, applyRotation=True, applyTranslation=True,
-                               manualTransform=StoredGroup(manualRotation=StoredGroup(z=StoredAttribute(0.))))
+                               manualTransform=StoredGroup(manualRotation=StoredGroup(z=StoredAttribute(0.)),
+                                                           manualScale=StoredAttribute(1.)))
         self.nodes = [camera, feature, matching, dense, transform]
 
     def node(self, name):
@@ -249,22 +259,41 @@ class NativeSettingsOrderTests(unittest.TestCase):
                               2, {'features': False}, (Path('/masks'), 'png'), ['first.jpg', 'second.jpg'])
         self.assertEqual(graph.initializations, [])
 
+    def test_dotted_group_paths_resolve_and_update_the_actual_child(self):
+        transform = StoredGraph().node('SfMTransform_1')
+        rotation = transform.attribute('manualTransform').childAttribute('manualRotation')
+        self.assertIs(transform.attribute('manualTransform.manualRotation.z'), rotation.childAttribute('z'))
+        r.settings(transform, {'manualTransform.manualRotation.z': 90., 'manualTransform.manualScale': 2.})
+        inputs = transform.toDict()['inputs']['manualTransform']
+        self.assertEqual(inputs, {'manualRotation': {'z': 90.}, 'manualScale': 2.})
+
     def test_manual_transform_requires_native_manual_method_in_either_key_order(self):
-        request = {'manualTransform': {'manualRotation': {'z': 90.}}, 'method': 'manual',
-                   'applyScale': False, 'applyRotation': True, 'applyTranslation': False}
-        for values in (request, dict(reversed(list(request.items())))):
-            graph = StoredGraph()
-            self.configure(graph, {'SfMTransform_1': values})
-            inputs = graph.node('SfMTransform_1').toDict()['inputs']
-            self.assertEqual(inputs['method'], 'manual')
-            self.assertEqual(inputs['manualTransform']['manualRotation']['z'], 90.)
-            self.assertFalse(inputs['applyScale'])
-            self.assertTrue(inputs['applyRotation'])
-        for method in ('transformation', 'auto_from_cameras'):
-            graph = StoredGraph()
-            with self.assertRaisesRegex(ValueError, 'manualTransform requires native method=manual'):
-                self.configure(graph, {'SfMTransform_1': {**request, 'method': method}})
-            self.assertEqual(graph.initializations, [])
+        forms = [
+            {'manualTransform': {'manualRotation': {'z': 90.}, 'manualScale': 2.}},
+            {'manualTransform.manualRotation.z': 90., 'manualTransform.manualScale': 2.},
+            {'manualTransform.manualRotation': {'z': 90.}, 'manualTransform.manualScale': 2.},
+            {'manualTransform.manualScale': 2.},
+        ]
+        for form in forms:
+            for method in ('manual', 'transformation', 'auto_from_cameras'):
+                request = {**form, 'method': method, 'applyScale': True,
+                           'applyRotation': True, 'applyTranslation': False}
+                for values in (request, dict(reversed(list(request.items())))):
+                    with self.subTest(form=form, method=method, order=list(values)):
+                        graph = StoredGraph()
+                        if method != 'manual':
+                            with self.assertRaisesRegex(ValueError, 'manualTransform requires native method=manual'):
+                                self.configure(graph, {'SfMTransform_1': values})
+                            self.assertEqual(graph.initializations, [])
+                            continue
+                        self.configure(graph, {'SfMTransform_1': values})
+                        inputs = graph.node('SfMTransform_1').toDict()['inputs']
+                        self.assertEqual(inputs['method'], 'manual')
+                        expected_rotation = 0. if list(form) == ['manualTransform.manualScale'] else 90.
+                        self.assertEqual(inputs['manualTransform']['manualRotation']['z'], expected_rotation)
+                        self.assertEqual(inputs['manualTransform']['manualScale'], 2.)
+                        self.assertTrue(inputs['applyScale'])
+                        self.assertTrue(inputs['applyRotation'])
 
     def test_unsupported_attributes_are_named_before_initialization(self):
         graph = StoredGraph()

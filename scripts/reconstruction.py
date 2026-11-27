@@ -206,7 +206,8 @@ def configure_standard_transform(graph, overrides, linked=None):
               'applyScale': True, 'applyRotation': False, 'applyTranslation': False}
     requested = overrides.get(transform.name, {})
     values.update(requested)
-    if 'manualTransform' in requested and values['method'] != 'manual':
+    if any(key == 'manualTransform' or key.startswith('manualTransform.')
+           for key in requested) and values['method'] != 'manual':
         raise ValueError(f'{transform.name}.manualTransform requires native method=manual; '
                          f'requested method={values["method"]!r}')
     settings(transform, values, linked)
