@@ -63,8 +63,11 @@ Grounded-SAM 2 добавляется только при потребности
 ## Тематические исследования
 
 - [Съёмка на Android с обратной связью — готовые решения и аудит интеграции](live-capture-feedback.md) (25 ноября 2026, по [issue #23](https://github.com/Kwentin3/photogrammetry-to-cad/issues/23)): сравнение RealityScan Mobile, RTAB-Map Android, пакетного `sparse-only` SfM и собственного ARCore-клиента; аудит инкрементального SfM в закреплённом Meshroom 2026. Это исследовательский материал, не изменение текущего рабочего маршрута.
-  - [Инструкция владельцу для первого опыта с RealityScan Mobile](realityscan-pilot-operator.md).
-  - [Процедура подготовки наборов А/Б и проверки нашим процессом](realityscan-pilot-verification.md).
+  - Целевой телефон **Huawei Mate 50**: AR-совместимость не подтверждена,
+    RealityScan остаётся условным вариантом; рабочий путь — обычная камера → sparse.
+  - [Условный рецепт опыта с RealityScan Mobile](realityscan-pilot-operator.md)
+    и [подготовки наборов А/Б](realityscan-pilot-verification.md) сохранены как
+    исследование; опыт не выполнен и не входит в выпуск #37.
 
 ## Архив
 
