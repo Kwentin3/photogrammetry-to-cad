@@ -13,6 +13,7 @@ from pathlib import Path
 import sys
 
 from capture_measurements import is_unselected_placeholder
+from reconstruction_bundle import file_record, obj_bundle, relative_file
 
 from check_marker_scale import (
     MarkerError, cctag_landmarks, identifier, markers_from_scene, number, read_json,
@@ -358,13 +359,55 @@ def mesh_summary(path, cloud, scale):
     return result
 
 
+def verified_derived(receipt_path, settings):
+    """Check the export owner's binding and a relocatable complete model bundle."""
+    receipt_path = Path(receipt_path).resolve(strict=True)
+    binding = file_record(receipt_path)
+    if not any(item['sha256'] == binding['sha256'] and item['bytes'] == binding['bytes']
+               for item in settings.get('derived_exports', [])):
+        raise ValueError('Derived receipt has no saved export binding in effective settings')
+    receipt = read_json(receipt_path)
+    if receipt.get('schema_version') != 1 or receipt.get('kind') != 'native_derived_mesh':
+        raise ValueError('Expected a native derived mesh export receipt')
+    native = receipt['node']['serialized']
+    if native['nodeType'] not in {'MeshFiltering', 'Texturing'} or not native.get('uid'):
+        raise ValueError('Derived receipt needs a native MeshFiltering/Texturing node and UID')
+    root = receipt_path.parent
+    for snapshot in receipt['provenance'].values():
+        actual = file_record(relative_file(root, root / '_root', snapshot['path']))
+        if any(actual[field] != snapshot[field] for field in ('sha256', 'bytes')):
+            raise ValueError('Derived provenance snapshot differs from saved SHA-256')
+    saved_project = read_json(root / receipt['provenance']['project.mg']['path'])
+    saved_node = saved_project['graph'][receipt['node']['name']]
+    if any(saved_node[field] != native[field] for field in ('nodeType', 'uid', 'inputs')):
+        raise ValueError('Derived node/settings differ from the saved native project')
+    saved_settings = read_json(root / receipt['provenance']['effective-settings.json']['path'])
+    for field in ('settings_sha256', 'input_manifest_sha256', 'runtime', 'scale'):
+        if saved_settings.get(field) != settings.get(field):
+            raise ValueError(f'Derived source run differs from report settings: {field}')
+    raw_binding = settings.get('mesh_export')
+    if raw_binding and receipt['raw_meshing']['sha256'] != raw_binding['sha256']:
+        raise ValueError('Derived raw source differs from saved native export SHA-256')
+    bundle = receipt['bundle']
+    actual = obj_bundle(root / 'model', bundle['model'], textured=native['nodeType'] == 'Texturing')
+    if actual != bundle:
+        raise ValueError('Derived model/material/map bundle differs from saved export manifest')
+    return receipt, root / 'model' / bundle['model'], binding
+
+
 def report(scene_path, cloud_path, settings_path, manifest_path=None, scale_evidence_path=None, mesh_path=None,
-           measurements_path=None, tolerance_mm=None):
+           measurements_path=None, tolerance_mm=None, derived_paths=None):
     if tolerance_mm is not None and number(tolerance_mm, 'result tolerance_mm') < 0:
         raise ValueError('Result tolerance_mm must be nonnegative')
     inputs = {"scene": artifact(scene_path), "cloud": artifact(cloud_path),
               "settings": artifact(settings_path)}
     settings = read_json(settings_path)
+    derived = [verified_derived(path, settings) for path in (derived_paths or [])]
+    if derived:
+        for name in ('scene', 'cloud'):
+            expected = settings.get('artifact_sha256', {}).get(name)
+            if expected and expected != inputs[name]['sha256']:
+                raise ValueError(f'Derived report {name} differs from saved raw export SHA-256')
     manifest = (Path(manifest_path).resolve(strict=True) if manifest_path is not None
                 else absolute_file(settings["input_manifest"], "settings.input_manifest"))
     inputs["input_manifest"] = artifact(manifest)
@@ -389,6 +432,13 @@ def report(scene_path, cloud_path, settings_path, manifest_path=None, scale_evid
         if binding and binding['sha256'] != inputs['mesh']['sha256']:
             raise ValueError('Mesh differs from saved native export SHA-256')
         result['mesh'] = mesh_summary(mesh_path, result['cloud'], scale)
+    if derived:
+        result['derived_meshes'] = []
+        for receipt, model, binding in derived:
+            summary = mesh_summary(model, result['cloud'], scale)
+            summary['processing'] = receipt['node']['serialized']['nodeType'] + ' native output; see native inputs/settings'
+            result['derived_meshes'].append({'receipt': binding, 'provenance': receipt,
+                                             'mesh': summary})
     if sheet is not None:
         result['measurements'] = pair_report(sheet, actual_scene, scale, tolerance_mm)
     return result
@@ -400,6 +450,8 @@ def main():
                         help="Native canonical JSON with views/poses/intrinsics/CCTag3 observations")
     parser.add_argument("--cloud", type=Path, required=True, help="Native dense PLY exported after backup")
     parser.add_argument("--mesh", type=Path, help="Separate raw native Meshing outputMesh (OBJ qualified)")
+    parser.add_argument('--derived', type=Path, action='append', default=[],
+                        help='Derived export receipt; repeat for filtering and texturing bundles')
     parser.add_argument("--settings", type=Path, required=True, help="Effective settings and scale evidence paths")
     parser.add_argument("--manifest", type=Path,
                         help="Explicit local copy of input manifest; preserve its settings SHA-256 binding")
@@ -418,6 +470,10 @@ def main():
         parser.error("Write reconstruction evidence outside the source checkout")
     protected = {args.scene.resolve(), args.cloud.resolve(), args.settings.resolve()}
     protected.update(path.resolve() for path in (args.manifest, args.scale_evidence, args.mesh, args.measurements) if path is not None)
+    for receipt_path in args.derived:
+        protected.add(receipt_path.resolve())
+        if any(p.is_relative_to(receipt_path.resolve().parent) for p in outputs):
+            parser.error('Write report outside every derived bundle')
     if outputs & protected or table == output:
         parser.error("Output must differ from every input and scale evidence artifact")
     try:
@@ -429,7 +485,7 @@ def main():
         if outputs & protected:
             parser.error("Output must differ from every input and scale evidence artifact")
         result = report(args.scene, args.cloud, args.settings, args.manifest, args.scale_evidence, args.mesh,
-                        args.measurements, args.tolerance_mm)
+                        args.measurements, args.tolerance_mm, args.derived)
     except (ValueError, KeyError, TypeError, AttributeError, OverflowError, OSError, RuntimeError) as error:
         result = {"schema_version": 1, "status": "error", "error": str(error)}
     result["output_file"] = str(output)
