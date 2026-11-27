@@ -101,7 +101,7 @@ Standard. Backup проверен локально, аренда удалена;
 | Отбор | Когда и настройки | Статус / запуск |
 |---|---|---|
 | Regular | Предсказуемый шаг кадров: `selectionMethod.useSmartSelection=false`, `regularSelection.minFrameStep/maxFrameStep/maxNbOutFrames` внутри selectionMethod. Ограничение maxNbOutFrames вместе с шагом может оборвать охват до конца ролика | **Выполнено** в #6: Objectron MOV → 37 кадров → оба плотных результата. Готовые команды и manifest — [runbook](runbook.md) |
-| Smart | Неравномерное движение и резкость: `selectionMethod.useSmartSelection=true`, `smartSelection.pxDisplacement/minNbOutFrames/maxNbOutFrames`; scores используют sharpness и optical flow. `maskPaths` при необходимости исключают фон из оценки | **Рецепт**, bundled node, без ML-дополнения. Штатные имена и полные параметры — [pinned KeyframeSelection.py][keyframes]. Нового smart-прогона не было |
+| Smart | Неравномерное движение и резкость: `selectionMethod.useSmartSelection=true`, `smartSelection.pxDisplacement/minNbOutFrames/maxNbOutFrames`; scores используют sharpness и optical flow. `maskPaths` при необходимости исключают фон из оценки | **Выполнено** 25 ноября: собственное видео → 160 проверенных кадров, flow 240/sharpness 720, экспорт 1080×2560. Обмерная геометрия комнаты не получена. [Фактический прогон](reports/2026-11-25/room-smart.md); имена параметров — [pinned KeyframeSelection.py][keyframes] |
 
 Для smart используется тот же этап подготовки видео из runbook с выбором smart
 и его параметрами; затем выбранные файлы поступают в обычную реконструкцию.
