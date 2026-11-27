@@ -1,0 +1,5 @@
+measurement_id,purpose,from_point,to_point,planned_mm,measured_mm,uncertainty_mm,status,method,confirmation_source,notes
+scale_baseline,scale,cctag3:0:center,cctag3:1:center,1500,,,planned,,,Пример для доступной стены комнаты: отдельные ID 0 и 1; расстояние выставить и проверить при установке
+marker_check_2_3,check,cctag3:2:center,cctag3:3:center,1000,,,planned,,,Отдельные ID 2 и 3 для независимого контроля; не использовать для подгонки масштаба
+object_check_1,check,REPLACE_object_1_start,REPLACE_object_1_end,,,,unknown,,,Необязательный размер объекта: агент выбирает только при необходимости; углы вручную размечать не требуется
+object_check_2,check,REPLACE_object_2_start,REPLACE_object_2_end,,,,unknown,,,Необязательный дополнительный контроль; неизвестное оставить пустым

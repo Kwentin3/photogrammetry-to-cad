@@ -8,14 +8,19 @@ import csv
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from capture_measurements import FIELDS, confirmed_scale, load_measurements, scale_row
 spec = importlib.util.spec_from_file_location("check_capture_kit", ROOT / "scripts/check_capture_kit.py")
 checker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checker)
@@ -27,6 +32,84 @@ NATIVE_DESCRIPTORS = base64.b64decode(
     "AgAAAAAAAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 )
 NATIVE_FEATURES = "511.134 441.626 41.6458 0\n682.664 457.109 39.1811 0\n"
+
+
+class PublishedWorkingCopyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if os.name == "nt":
+            # Use Git Bash, never the System32 WSL launcher.
+            candidates = [Path("C:/Program Files/Git/bin/bash.exe"),
+                          Path("C:/Program Files (x86)/Git/bin/bash.exe")]
+            cls.bash = next((str(path) for path in candidates if path.is_file()), None)
+        else:
+            cls.bash = shutil.which("bash")
+        if cls.bash is None:
+            raise unittest.SkipTest("Published recipe behavior requires ordinary Bash")
+
+    @staticmethod
+    def published_recipe():
+        document = (ROOT / "docs/capture.md").read_text(encoding="utf-8")
+        section = document.split("<!-- capture-working-copy:start -->", 1)[1].split(
+            "<!-- capture-working-copy:end -->", 1)[0]
+        return section.split("```bash\n", 1)[1].split("```", 1)[0]
+
+    def run_recipe(self, work):
+        env = os.environ.copy()
+        env["WORK"] = work.as_posix()
+        for key in ("BASH_ENV", "SHELLOPTS"):
+            env.pop(key, None)
+        return subprocess.run([self.bash, "--noprofile", "--norc", "-c", self.published_recipe()],
+                              env=env, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=15)
+
+    def test_create_then_preserve_confirmed_bytes_on_repeated_runs(self):
+        template = (ROOT / "templates/capture-kit/measurements.csv").read_bytes()
+        with tempfile.TemporaryDirectory(prefix="capture copy guard ") as temporary:
+            work = Path(temporary)
+            (work / "capture-kit-02").mkdir()
+            (work / "capture-kit-02/measurements.csv").write_bytes(template)
+            target = work / "capture/measurements.csv"
+            result = self.run_recipe(work)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Создана рабочая форма", result.stdout)
+            self.assertEqual(target.read_bytes(), template)
+            self.assertFalse((work / "measurements.csv").exists())
+            with target.open(encoding="utf-8", newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            for row in rows:
+                if row["purpose"] == "scale":
+                    row.update(status="confirmed_nominal", method="checked during fixture installation",
+                               confirmation_source="Synthetic fixture operator confirmation")
+            with target.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=FIELDS)
+                writer.writeheader()
+                writer.writerows(rows)
+            confirmed_scale(load_measurements(target))
+            confirmed = target.read_bytes()
+            for _ in range(2):
+                result = self.run_recipe(work)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Сохранена существующая рабочая форма", result.stdout)
+                self.assertEqual(target.read_bytes(), confirmed)
+
+    def test_preserve_empty_file_and_report_copy_error(self):
+        with tempfile.TemporaryDirectory(prefix="capture copy guard ") as temporary:
+            work = Path(temporary)
+            target = work / "capture/measurements.csv"
+            target.parent.mkdir()
+            target.touch()
+            result = self.run_recipe(work)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Сохранена существующая рабочая форма", result.stdout)
+            self.assertEqual(target.read_bytes(), b"")
+        with tempfile.TemporaryDirectory(prefix="capture missing kit ") as temporary:
+            work = Path(temporary)
+            result = self.run_recipe(work)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Не удалось создать рабочую форму", result.stderr)
+            self.assertNotIn("Создана рабочая форма", result.stdout)
+            self.assertFalse((work / "capture/measurements.csv").exists())
 
 
 class NativeRegionContractTests(unittest.TestCase):
@@ -75,12 +158,21 @@ class DeliveredKitTests(unittest.TestCase):
             self.assertEqual(reader.fieldnames, canonical_fields)
             rows = list(reader)
         self.assertTrue(all(not row["measured_mm"] for row in rows))
+        self.assertTrue(all(row["status"] in {"planned", "unknown"} for row in rows))
+        self.assertTrue(all(not row["confirmation_source"] for row in rows))
         self.assertEqual(sum(row["purpose"] == "scale" for row in rows), 1)
         self.assertEqual(sum(row["measurement_id"].startswith("object_check_") for row in rows), 2)
         self.assertEqual(sum(row["purpose"] == "print_check" for row in rows), 8)
         manifest = json.loads((kit / "manifest.json").read_text(encoding="utf-8"))
-        for name, field in [("cctag3-print.pdf", "pdf_sha256"), ("measurements.csv", "measurements_sha256")]:
+        for name, field in [("cctag3-print.pdf", "pdf_sha256"), ("measurements.csv", "measurements_sha256"),
+                            ("placement.txt", "placement_sha256"), ("placement-plan.csv", "placement_plan_sha256")]:
             self.assertEqual(hashlib.sha256((kit / name).read_bytes()).hexdigest(), manifest[field])
+            if name.endswith((".csv", ".txt")):
+                self.assertNotIn(b"\r", (kit / name).read_bytes(), "Published kit hashes must survive Linux checkout")
+        sheet = load_measurements(kit / "measurements.csv")
+        self.assertIsNone(scale_row(sheet)["confirmed_mm"])
+        with self.assertRaisesRegex(ValueError, "not confirmed"):
+            confirmed_scale(sheet)
 
     @unittest.skipUnless(importlib.util.find_spec("fitz"), "Optional PDF checks require requirements-capture-kit.txt")
     def test_final_pdf_has_actual_paper_and_marker_dimensions(self):
@@ -108,8 +200,7 @@ class DeliveredKitTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="cctag-printed-id-") as temporary:
             root = Path(temporary)
             kit = root / "kit"
-            kit.mkdir()
-            shutil.copyfile(original / "measurements.csv", kit / "measurements.csv")
+            shutil.copytree(original, kit)
             with fitz.open(original / "cctag3-print.pdf") as document:
                 page = document[1]
                 title = page.search_for("CCTag3 - ID 1")[0]
@@ -134,6 +225,94 @@ class DeliveredKitTests(unittest.TestCase):
             self.assertEqual(source["pdf_sha256"], checker.sha256(original / "cctag3-print.pdf"))
             self.assertEqual([item["expected_id"] for item in inputs], [0, 1, 2, 3])
             self.assertTrue(scene.is_file())
+
+    def test_working_confirmation_does_not_change_issued_kit(self):
+        original = ROOT / "templates/capture-kit"
+        before = checker.sha256(original / "measurements.csv")
+        with tempfile.TemporaryDirectory(prefix="cctag-working-sheet-") as temporary:
+            working = Path(temporary) / "measurements.csv"
+            with (original / "measurements.csv").open(encoding="utf-8", newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            for row in rows:
+                if row["purpose"] == "scale":
+                    row.update(status="confirmed_nominal", method="checked during placement",
+                               confirmation_source="Operator chat: placed and checked as planned")
+            with working.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=FIELDS)
+                writer.writeheader()
+                writer.writerows(rows)
+            sheet = load_measurements(working)
+            resolved = confirmed_scale(sheet)
+            self.assertEqual(resolved["distance"], scale_row(sheet)["planned_mm"])
+            self.assertIsNone(scale_row(sheet)["measured_mm"])
+            self.assertIsNone(resolved["measurement_uncertainty_mm"])
+            self.assertEqual(checker.sha256(original / "measurements.csv"), before)
+
+
+@unittest.skipUnless(os.environ.get("CCTAG_SOURCE_DIR") and all(
+    importlib.util.find_spec(name) for name in ("reportlab", "svglib", "svgwrite", "fitz")),
+    "Real kit generation requires CCTAG_SOURCE_DIR and optional capture dependencies")
+class GeneratedPlanKitTests(unittest.TestCase):
+    def setUp(self):
+        import make_capture_kit
+        self.maker = make_capture_kit
+        self.source = Path(os.environ["CCTAG_SOURCE_DIR"])
+        self.maker.source_files(self.source, False)
+        temporary = tempfile.TemporaryDirectory(prefix="cctag-plan-kit-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def write_plan(self, name="plan.csv", **changes):
+        row = dict.fromkeys(FIELDS, "")
+        row.update(measurement_id="other_scale", purpose="scale", from_point="cctag3:7:center",
+                   to_point="cctag3:31:center", planned_mm="1234.5", status="planned")
+        row.update(changes)
+        control = dict.fromkeys(FIELDS, "")
+        control.update(measurement_id="other_control", purpose="check", from_point="cctag3:23:center",
+                       to_point="cctag3:5:center", planned_mm="877.25", status="planned")
+        path = self.root / name
+        with path.open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=FIELDS)
+            writer.writeheader()
+            writer.writerows([row, control])
+        return path
+
+    def test_real_generator_preserves_nondefault_pairs_and_unconfirmed_plan(self):
+        import fitz
+        plan = self.write_plan()
+        kit = self.root / "kit"
+        manifest = self.maker.make_kit(self.source, kit, [7, 23, 31, 5], 160, "A3", plan)
+        sheet = load_measurements(kit / "measurements.csv")
+        scale = scale_row(sheet)
+        self.assertEqual(scale["marker_ids"], [7, 31])
+        self.assertEqual(scale["planned_mm"], 1234.5)
+        self.assertIsNone(scale["measured_mm"])
+        self.assertTrue(all(row["confirmed_mm"] is None for row in sheet["rows"]))
+        self.assertEqual(sum(row["purpose"] == "print_check" for row in sheet["rows"]), 8)
+        control = next(row for row in sheet["rows"] if row["purpose"] == "check")
+        self.assertEqual(control["marker_ids"], [23, 5])
+        self.assertEqual(control["planned_mm"], 877.25)
+        self.assertEqual(manifest["placement_plan_sha256"], checker.sha256(plan))
+        self.assertEqual((kit / "placement-plan.csv").read_bytes(), plan.read_bytes())
+        self.assertIn("центры ID 7 и ID 31", (kit / "placement.txt").read_text(encoding="utf-8"))
+        self.assertIn("1234.5", (kit / "placement.txt").read_text(encoding="utf-8"))
+        with fitz.open(kit / "cctag3-print.pdf") as document:
+            self.assertAlmostEqual(document[0].rect.width / 72 * 25.4, 297, places=3)
+        output = self.root / "pdf-inputs"
+        output.mkdir()
+        _, inputs, _ = checker.prepare_inputs(SimpleNamespace(kit=kit, images=None, dpi=72), output)
+        self.assertEqual([row["expected_id"] for row in inputs], [7, 23, 31, 5])
+
+    def test_confirmed_sheet_cannot_be_reissued_as_a_draft_plan(self):
+        plan = self.write_plan(status="confirmed_nominal", method="checked during placement",
+                               confirmation_source="Operator reply")
+        with self.assertRaisesRegex(ValueError, "must be unconfirmed"):
+            self.maker.make_kit(self.source, self.root / "kit", [7, 23, 31, 5], 160, "A3", plan)
+
+    def test_plan_ids_must_be_in_issued_pages(self):
+        plan = self.write_plan()
+        with self.assertRaisesRegex(ValueError, "not printed"):
+            self.maker.make_kit(self.source, self.root / "kit", [7, 23, 5], 160, "A3", plan)
 
 
 if __name__ == "__main__":
