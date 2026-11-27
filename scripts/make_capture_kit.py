@@ -15,6 +15,8 @@ import sys
 import tempfile
 from urllib.request import urlopen
 
+from capture_measurements import FIELDS, load_measurements, scale_row
+
 from reportlab.graphics import renderPDF
 from reportlab.lib.pagesizes import A3, A4
 from reportlab.lib.units import mm
@@ -48,7 +50,87 @@ def source_files(directory, download):
             raise ValueError(f"Missing or changed pinned source: {path}")
 
 
-def make_kit(source_dir, output, ids, diameter_mm, paper):
+def draft_row(row_id, purpose, start, end, planned=None, notes=""):
+    row = dict.fromkeys(FIELDS, "")
+    row.update(measurement_id=row_id, purpose=purpose, from_point=start, to_point=end,
+               planned_mm=planned, status="planned" if planned is not None else "unknown", notes=notes)
+    return row
+
+
+def layout_rows(ids, plan):
+    """Lay out owner-validated scene rows; printer ticks belong to this PDF layout."""
+    printed = []
+    for page in range(1, len(ids) + 1):
+        for axis in ("x", "y"):
+            printed.append(draft_row(f"print_page_{page}_{axis}", "print_check",
+                                    f"page_{page}_{axis}_tick_start", f"page_{page}_{axis}_tick_end", 100,
+                                    "Print check only; does not confirm any scene distance"))
+    if plan is None:
+        scene = [draft_row("scale_baseline", "scale", f"cctag3:{ids[0]}:center", f"cctag3:{ids[1]}:center",
+                           notes="Agent selects a placement plan before operator confirmation")]
+        scene.extend(draft_row(f"marker_check_{a}_{b}", "check", f"cctag3:{a}:center", f"cctag3:{b}:center",
+                               notes="Independent check; never fit scale")
+                     for a, b in zip(ids[:2], ids[2:4]))
+        scene.extend(draft_row(f"object_check_{n}", "check", f"REPLACE_object_{n}_start", f"REPLACE_object_{n}_end",
+                               notes="Optional object check; leave unknown until selected and confirmed")
+                     for n in (1, 2))
+        return printed + scene
+    sheet = load_measurements(plan)
+    scale_row(sheet)
+    expected_print = {row["measurement_id"]: row for row in printed}
+    scene = []
+    for row in sheet["rows"]:
+        if row["status"] not in {"planned", "unknown"}:
+            raise ValueError("An issued placement plan must be unconfirmed; retain confirmations in the separate working copy")
+        if row["marker_ids"] and not set(row["marker_ids"]).issubset(ids):
+            raise ValueError(f"Plan pair {row['measurement_id']} refers to an ID not printed in this kit")
+        if row["purpose"] == "print_check":
+            expected = expected_print.get(row["measurement_id"])
+            if (expected is None or any(row[key] != expected[key] for key in ("from_point", "to_point"))
+                    or row["planned_mm"] not in (None, 100)):
+                raise ValueError("Plan print_check rows must match the issued page ticks; they are regenerated from PDF layout")
+            continue
+        if row["measurement_id"] in expected_print:
+            raise ValueError("Scene row ID conflicts with a generated print check")
+        scene.append(row)
+    return printed + scene
+
+
+def placement_text(rows):
+    lines = ["Установка отдельных мишеней CCTag3", "",
+             "Это план, а не подтверждённые расстояния. Для примера комнаты/стены агент выбирает доступные поверхности.",
+             "Напечатайте нужные страницы при 100% без подгонки. Проверьте X и Y: по 100 мм на каждом листе.",
+             "Закрепите разные ID плоско, матово и неподвижно. Рейка и точный прямоугольник не требуются.",
+             "Все расстояния относятся к серым центрам мишеней, а не к краям бумаги или углам объекта.", ""]
+    role_names = {"scale": "МАСШТАБ", "check": "НЕЗАВИСИМЫЙ КОНТРОЛЬ", "manual_parameter": "ОТДЕЛЬНЫЙ РУЧНОЙ ПАРАМЕТР"}
+    for row in rows:
+        if row["purpose"] == "print_check":
+            continue
+        if any(row[key].startswith("REPLACE_") for key in ("from_point", "to_point")):
+            lines.append("Дополнительный контроль объекта пока не выбран; выполняется только по отдельному заданию агента.")
+            continue
+        value = row["planned_mm"]
+        planned = ("не задан" if value is None else
+                   f"{int(value) if float(value).is_integer() else value} мм")
+        pair = (f"центры ID {row['marker_ids'][0]} и ID {row['marker_ids'][1]}" if row["marker_ids"]
+                else f"{row['from_point']} — {row['to_point']}")
+        lines.append(f"{role_names[row['purpose']]}: {pair} | план: {planned} | не подтверждено")
+        if row["notes"]:
+            lines.append(f"  {row['notes']}")
+    lines.extend(["", "Выставьте заданные расстояния и проверьте их при установке. Допустимо сообщить фактически получившиеся длины.",
+                  "Ответьте агенту обычным сообщением: какие пары выставлены по заданию, где длина отличается, что осталось неизвестно.",
+                  "Например: «Масштабную пару выставил по заданию и проверил; у контрольной получилось другое расстояние: … мм».",
+                  "Укажите способ и известную точность установки/замера; неизвестную точность так и обозначьте.",
+                  "Отдельный повторный обмер уже подтверждённой установки не обязателен. Контрольными парами масштаб не подгоняем.",
+                  "Подтверждение печати не подтверждает расстояния между установленными мишенями.",
+                  "CSV заполняет агент в отдельной рабочей копии; этот комплект и его manifest не редактируйте.",
+                  "До полного обхода передайте 3–5 оригинальных пробных фото с рабочей дистанции, с разных точек.",
+                  "Мишени и объект во время съёмки неподвижны. Если открываете дверь, закрепите её положение заранее.",
+                  "Распознавание ID проверяет читаемость, а масштабная пара — применение масштаба; точность всей сцены этим не доказана."])
+    return "\n".join(lines) + "\n"
+
+
+def make_kit(source_dir, output, ids, diameter_mm, paper, plan=None):
     if len(ids) < 2 or len(ids) != len(set(ids)) or any(i not in range(32) for i in ids):
         raise ValueError("Use at least two distinct native CCTag3 IDs in 0..31")
     page_size = {"A4": A4, "A3": A3}[paper]
@@ -57,6 +139,9 @@ def make_kit(source_dir, output, ids, diameter_mm, paper):
     tile_mm = diameter_mm * 1.4
     if not 20 <= diameter_mm or tile_mm > min(width - 40, height - 135):
         raise ValueError("Diameter does not fit preserved margins; select larger paper")
+    rows = layout_rows(ids, plan)
+    if output.exists() and any(output.iterdir()):
+        raise FileExistsError("Preserve issued kits and working confirmations; select a new output directory")
     output.mkdir(parents=True, exist_ok=True)
     pdf = output / "cctag3-print.pdf"
     center_x, center_y = width / 2, height / 2 + 10
@@ -82,7 +167,7 @@ def make_kit(source_dir, output, ids, diameter_mm, paper):
                            (center_y - tile_mm / 2) * mm)
             canvas.setFont("Helvetica", 10)
             canvas.drawString(20 * mm, 77 * mm,
-                              f"Outer black diameter: {diameter_mm:g} mm. Measure between gray centres.")
+                              f"Outer black diameter: {diameter_mm:g} mm. Distances refer to gray centres.")
             canvas.drawString(20 * mm, 70 * mm,
                               "Keep white margins. Fix flat on rigid matte support. Do not fold.")
             # Two independent printer checks reveal nonuniform scaling as well.
@@ -102,7 +187,7 @@ def make_kit(source_dir, output, ids, diameter_mm, paper):
             canvas.drawCentredString(0, 0, "PRINT CHECK Y: 100 mm")
             canvas.restoreState()
             canvas.drawString(20 * mm, 26 * mm,
-                              "Print checks are not the scene baseline. Measure after mounting.")
+                              "Print checks are not the scene baseline. Follow the placement plan.")
             canvas.drawString(20 * mm, 19 * mm,
                               f"Page {index}/{len(ids)} | bank {PIN[:12]} | native ID {marker_id}")
             canvas.showPage()
@@ -112,22 +197,14 @@ def make_kit(source_dir, output, ids, diameter_mm, paper):
         canvas.save()
     measurements = output / "measurements.csv"
     with measurements.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.writer(stream, lineterminator="\n")
-        writer.writerow(["measurement_id", "purpose", "from_point", "to_point",
-                         "measured_mm", "uncertainty_mm", "method", "notes"])
-        for page in pages:
-            for axis in ("x", "y"):
-                writer.writerow([f"print_page_{page['page']}_{axis}", "print_check",
-                                 f"page_{page['page']}_{axis}_tick_start", f"page_{page['page']}_{axis}_tick_end",
-                                 "", "", "", "Nominal 100 mm; check printed sheet before mounting"])
-        writer.writerow(["scale_baseline", "scale", f"cctag3:{ids[0]}:center", f"cctag3:{ids[1]}:center",
-                         "", "", "", "Measure gray centres in place; this pair defines scale only"])
-        for a, b in zip(ids[:2], ids[2:4]):
-            writer.writerow([f"marker_check_{a}_{b}", "check", f"cctag3:{a}:center", f"cctag3:{b}:center",
-                             "", "", "", "Independent marker check; do not use to fit scale"])
-        for number in (1, 2):
-            writer.writerow([f"object_check_{number}", "check", f"REPLACE_object_{number}_start", f"REPLACE_object_{number}_end",
-                             "", "", "", "Describe and photograph both endpoints; do not fit scale"])
+        writer = csv.DictWriter(stream, fieldnames=FIELDS, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: "" if row[key] is None else row[key] for key in FIELDS})
+    issued_sheet = load_measurements(measurements)
+    scale_row(issued_sheet)
+    placement = output / "placement.txt"
+    placement.write_text(placement_text(issued_sheet["rows"]), encoding="utf-8", newline="\n")
     manifest = {
         "family": "cctag3", "native_ids": ids, "paper": paper,
         "page_size_mm": [width, height], "outer_diameter_mm": diameter_mm,
@@ -135,9 +212,14 @@ def make_kit(source_dir, output, ids, diameter_mm, paper):
         "generator_arguments": generator_args, "pages": pages,
         "versions": {name: importlib.metadata.version(name) for name in ("reportlab", "svglib", "svgwrite")},
         "pdf_sha256": sha256(pdf), "measurements_sha256": sha256(measurements),
+        "placement_sha256": sha256(placement),
         "physical_print_validated": False, "metric_capture_validated": False,
     }
-    (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    if plan is not None:
+        issued_plan = output / "placement-plan.csv"
+        issued_plan.write_bytes(Path(plan).read_bytes())
+        manifest["placement_plan_sha256"] = sha256(issued_plan)
+    (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
     return manifest
 
 
@@ -149,10 +231,11 @@ def main():
     parser.add_argument("--ids", nargs="+", type=int, default=[0, 1, 2, 3])
     parser.add_argument("--diameter-mm", type=float, default=100)
     parser.add_argument("--paper", choices=["A4", "A3"], default="A4")
+    parser.add_argument("--plan", type=Path, help="Unconfirmed placement CSV using capture_measurements.FIELDS; page print checks are regenerated")
     args = parser.parse_args()
     source_dir = args.source_dir.resolve()
     source_files(source_dir, args.download_source)
-    result = make_kit(source_dir, args.output, args.ids, args.diameter_mm, args.paper)
+    result = make_kit(source_dir, args.output, args.ids, args.diameter_mm, args.paper, args.plan)
     print(json.dumps({"pdf": str(args.output / "cctag3-print.pdf"), "sha256": result["pdf_sha256"]}))
 
 

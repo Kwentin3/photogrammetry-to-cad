@@ -1,0 +1,15 @@
+{
+  "pipeline": "legacy",
+  "images": "../capture/images",
+  "input_manifest": "../capture/manifest.json",
+  "resources": {"threads": 8},
+  "nodes": {
+    "FeatureExtraction_1": {"describerTypes": ["dspsift", "cctag3"], "describerPreset": "normal", "describerQuality": "normal"},
+    "FeatureMatching_1": {"describerTypes": ["dspsift", "cctag3"]},
+    "StructureFromMotion_1": {"describerTypes": ["dspsift", "cctag3"]},
+    "DepthMap_1": {"downscale": 2},
+    "Meshing_1": {"maxInputPoints": 10000000, "maxPoints": 1000000}
+  },
+  "masks": null,
+  "scale": {"mode": "measured_baseline", "measurements": "../capture/measurements.csv"}
+}

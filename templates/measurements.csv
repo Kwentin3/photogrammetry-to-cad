@@ -1,1 +1,1 @@
-measurement_id,purpose,from_point,to_point,measured_mm,uncertainty_mm,method,notes
+measurement_id,purpose,from_point,to_point,planned_mm,measured_mm,uncertainty_mm,status,method,confirmation_source,notes

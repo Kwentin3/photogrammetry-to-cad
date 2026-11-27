@@ -8,6 +8,7 @@ on:
       - 'templates/capture-kit/**'
       - 'scripts/make_capture_kit.py'
       - 'scripts/check_capture_kit.py'
+      - 'scripts/capture_measurements.py'
       - 'tests/test_capture_kit.py'
       - 'requirements-capture-kit.txt'
       - 'docs/capture.md'
@@ -18,6 +19,7 @@ on:
       - 'templates/capture-kit/**'
       - 'scripts/make_capture_kit.py'
       - 'scripts/check_capture_kit.py'
+      - 'scripts/capture_measurements.py'
       - 'tests/test_capture_kit.py'
       - 'requirements-capture-kit.txt'
       - 'docs/capture.md'
@@ -40,8 +42,8 @@ jobs:
     env:
       OMP_NUM_THREADS: '2'
       OPENBLAS_NUM_THREADS: '2'
-      CAPTURE_DETECTOR_URL: https://github.com/alicevision/Meshroom/releases/download/nightly/Meshroom-2026.11.24-596c70d-linux-full.tar.gz
-      CAPTURE_DETECTOR_SHA256: f1f540e2349542446524799c4e368be22afe16bb98b950c0a98c04300c92ff36
+      CAPTURE_DETECTOR_URL: https://github.com/alicevision/Meshroom/releases/download/nightly/Meshroom-2026.11.25-7b14248-linux-full.tar.gz
+      CAPTURE_DETECTOR_SHA256: e940dd368fce532c06977cacf5c97fa48f2fe0677995ffd7bba89fe6c1bef4a0
     steps:
       - name: Check out candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

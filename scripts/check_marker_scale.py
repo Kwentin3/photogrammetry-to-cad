@@ -7,6 +7,14 @@ from pathlib import Path
 import sys
 
 
+class MarkerError(ValueError):
+    """A native marker pair cannot be evaluated; code is stable for reports."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
 def read_json(path):
     if path.stat().st_size > 64 * 1024 * 1024:
         raise ValueError(f"Export marker-only JSON first; input exceeds 64 MiB: {path}")
@@ -91,23 +99,40 @@ def cctag_landmarks(scene, reconstructed_views, label, requested=None):
 def markers_from_scene(scene, requested, label):
     reconstructed_views = scene_reconstructed_views(scene, label)
     if len(reconstructed_views) < 2:
-        raise ValueError(f"{label} needs at least two reconstructed views; export views, poses and intrinsics")
+        raise MarkerError('insufficient_observations', f"{label} needs at least two reconstructed views; export views, poses and intrinsics")
     found = {}
     for marker in cctag_landmarks(scene, reconstructed_views, label, requested):
         marker_id = marker["id"]
         if marker_id in found:
-            raise ValueError(f"Duplicate cctag3 marker ID {marker_id} in {label}")
+            raise MarkerError('ambiguous_marker', f"Duplicate cctag3 marker ID {marker_id} in {label}")
         if marker["reconstructed_view_count"] < 2:
-            raise ValueError(f"Marker {marker_id} in {label} has only {marker['reconstructed_view_count']} distinct reconstructed observations")
+            raise MarkerError('insufficient_observations', f"Marker {marker_id} in {label} has only {marker['reconstructed_view_count']} distinct reconstructed observations")
         found[marker_id] = marker
     missing = sorted(set(requested) - found.keys())
     if missing:
-        raise ValueError(f"Missing cctag3 marker IDs in {label}: {missing}")
+        raise MarkerError('missing_marker', f"Missing cctag3 marker IDs in {label}: {missing}")
     distance = math.dist(found[requested[0]]["center"], found[requested[1]]["center"])
     if not math.isfinite(distance) or distance <= 0:
-        raise ValueError(f"Invalid zero or non-finite marker baseline in {label}")
+        raise MarkerError('invalid_baseline', f"Invalid zero or non-finite marker baseline in {label}")
     return {"markers": [found[key] for key in requested], "distance": distance,
             "scene_reconstructed_view_count": len(reconstructed_views)}
+
+
+def verify_applied_baseline(scene, ids, distance, label):
+    """Check scalar transfer against actual native centers, not physical accuracy."""
+    if not isinstance(ids, (list, tuple)) or len(ids) != 2:
+        raise ValueError('Applied baseline needs two distinct CCTag3 IDs')
+    ids = [identifier(value, 'applied baseline ID') for value in ids]
+    if ids[0] == ids[1] or any(value > 31 for value in ids):
+        raise ValueError('Applied baseline needs two distinct CCTag3 IDs in 0..31')
+    distance = number(distance, 'applied baseline target')
+    if distance <= 0:
+        raise ValueError('Applied baseline distance must be positive')
+    after = markers_from_scene(scene, ids, label)
+    error = abs(after['distance'] - distance)
+    tolerance = 1e-6 + 1e-8 * distance
+    return {'after': after, 'baseline_error': error, 'numeric_tolerance': tolerance,
+            'passed': error <= tolerance, 'scope': 'numerical transfer, not physical capture accuracy'}
 
 
 def reference_from_truth(path, requested, units):
