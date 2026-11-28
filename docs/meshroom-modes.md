@@ -277,7 +277,12 @@ MeshFiltering.inputMesh связан с ним; `MeshFiltering.outputMesh` — �
 сглаживания; сокращение сетки нужно лишь при реальном лимите размера/просмотрщика.
 Для этого есть отдельный bundled [MeshDecimate][decimate]; для задач по маскам/видимости —
 [MeshMasking][meshmasking] и [MeshRemoveUnseenFaces][unseen]. Это вспомогательные
-операции, не обязательные этапы; их новые прогоны не выполнялись.
+операции, не обязательные этапы. В Goal #40 MeshDecimate выбран из-за фактического
+лимита памяти GUI: отдельный native template/RUN, simplificationFactor=0.5
+(доля вершин, не обещание числа граней), прочие vertex limits=0, flipNormals=false.
+Результат требует отдельной проверки потерь; native quadric не предоставляет
+boundary lock или максимальное допустимое отклонение. Masking/RemoveUnseenFaces
+в этом запуске не применялись.
 `export-derived` поддерживает только MeshFiltering/Texturing. Для MeshDecimate
 или другой native операции нужны отдельно сохранённое происхождение
 (source/RUN/node/UID, параметры, файлы/SHA, преобразования), ручная выдача и её

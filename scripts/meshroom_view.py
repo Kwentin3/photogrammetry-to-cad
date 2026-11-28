@@ -148,6 +148,69 @@ def validate(args):
     verify_pins(args.mesa, MESA_PINS, "Mesa 26.3.1 x64")
 
 
+def native_material_default(app, workspace, direct_connection):
+    """Choose the qualified native Material mode once per created mesh entry."""
+    from PySide6.QtQml import QQmlEngine, QQmlExpression
+    attached = None
+
+    def added(_index, entry):
+        if not entry.metaObject().className().startswith("MeshEntry_QMLTYPE"):
+            raise ViewError("The qualified native MeshEntry is unavailable.")
+        # This bundle does not expose a Python converter for the native enum.
+        # Keep its write/read in the existing QML owner and return a number.
+        expression = QQmlExpression(QQmlEngine.contextForObject(entry), entry,
+            "layer && layer.shadingMode !== undefined ? "
+            "(layer.shadingMode = 2, Number(layer.shadingMode)) : -1")
+        actual, undefined = expression.evaluate()
+        if expression.hasError() or undefined or actual != 2:
+            raise ViewError("The qualified native Material default is unavailable.")
+
+    def report_failure(error):
+        print(f"Meshroom viewing profile: {error}", file=sys.stderr, flush=True)
+        app.exit(1)
+
+    def on_added(index, entry):
+        try:
+            added(index, entry)
+        except Exception as error:
+            report_failure(error)
+
+    def attach():
+        nonlocal attached
+        # QJSValue keeps private QML pointer types inside their native engine;
+        # toQObject returns the public QObject* instead of a typed QVariant.
+        panel_value = app.engine.newQObject(workspace).property("panel3dViewer")
+        panel = panel_value.toQObject()
+        if panel is None:
+            attached = None
+            return
+        inst = panel_value.property("viewer3D").property("collection").property(
+            "meshes").property("instantiator").toQObject()
+        if inst is None or not hasattr(inst, "objectAdded"):
+            raise ViewError("The qualified native mesh Instantiator is unavailable.")
+        if inst is attached:
+            return
+        entries = [entry for entry in inst.children()
+                   if entry.metaObject().className().startswith("MeshEntry_QMLTYPE")]
+        if len(entries) != int(inst.property("count")):
+            raise ViewError("The qualified native MeshEntry ownership is unavailable.")
+        for entry in entries:
+            added(-1, entry)
+        inst.objectAdded.connect(on_added, direct_connection)
+        attached = inst
+
+    def on_panel_changed(*_args):
+        try:
+            attach()
+        except Exception as error:
+            report_failure(error)
+
+    workspace.panel3dViewerChanged.connect(on_panel_changed, direct_connection)
+    attach()
+    # Keep the callbacks alive through app.exec(); no polling or mode forcing.
+    return on_added, on_panel_changed
+
+
 def native_gui(meshroom, mesa, project):
     """Load only the declared binary bundle, then use its native public GUI."""
     sys.dont_write_bytecode = True
@@ -166,7 +229,7 @@ def native_gui(meshroom, mesa, project):
     import meshroom as runtime
     runtime.setupEnvironment(runtime.Backend.PYSIDE)
     from meshroom.ui.app import MeshroomApp
-    from PySide6.QtCore import QObject
+    from PySide6.QtCore import QObject, Qt
     from PySide6.QtQml import QQmlEngine
     app = MeshroomApp([str(meshroom / "Meshroom.exe"), project])
     # Use the existing HDR toggle rather than replacing the 2D image reader.
@@ -185,6 +248,11 @@ def native_gui(meshroom, mesa, project):
     toggle.setProperty("checked", False)
     if viewer.property("useFloatImageViewer"):
         raise ViewError("Could not select the native 8-bit image viewer.")
+    workspace = next((item for item in app.engine.rootObjects()[0].findChildren(QObject)
+                      if item.metaObject().className().startswith("WorkspaceView_QMLTYPE")), None)
+    if workspace is None:
+        raise ViewError("The qualified native workspace is unavailable.")
+    material_callbacks = native_material_default(app, workspace, Qt.DirectConnection)
     return app.exec()
 
 

@@ -735,13 +735,23 @@ setsid -f bash "$REPO/scripts/remote_job.sh" "$WORK/jobs/$TARGET_KIND-standard" 
 в общем кэше одновременно. При backup учитывать фактический `effective.cache`,
 который с этой опцией может находиться вне нового RUN.
 
+Если нужен другой native состав графа (например, MeshDecimate между filter и
+texture при доказанном лимите viewer), сохранить отдельный `.mgt`/`.mg` через
+Meshroom GUI или Graph API и добавить `--template "$NATIVE_TEMPLATE"` к той же
+команде prepare. Это штатный `initFromTemplate`, а не ручная запись UID/status.
+В effective settings сохраняются путь и SHA шаблона. Проверить фактические
+links/параметры, отсутствие compatibility nodes и неизменность upstream UID до
+compute. Без этой опции используется прежний bundled standard/legacy template.
+Файл шаблона включить в backup вместе с settings и выполненным graph.
+
 Без forceCompute native planner пропускает SUCCESS chunks. Нужны сохранные
 файлы, их UID/статусы и неизменные входы. Новый JOB_DIR для новой цели; `--resume`
 только для прежних argv/cwd. Старые урезанные проекты #6 сами не обретают удалённые
 узлы: они остаются историческими, полнота графа относится к новой подготовке.
 Локальный native planner #8 сохранил старые UID после восстановления downstream
 в приватных копиях; Standard планировал только filter/texture, Legacy ещё PDS.
-Filtering/Texturing на Linux в этом Goal не вычислялись. Подробнее —
+В исторической проверке #8 Filtering/Texturing на Linux не вычислялись;
+реальный запуск выполнен в [Goal #40](goal-40.md). Подробнее —
 [native рецепты и ограничения](meshroom-modes.md#продолжение-штатного-графа).
 
 Texturing требует `Meshing.output` — dense SfMData с visibility и всеми USD
@@ -1144,6 +1154,14 @@ image paths/UID. Launcher не строит PACKAGE и не выполняет c
 native `AliceVision:ColorSpace`, что проверяется на фактических файлах. Рецепт
 не разрешает незаметно перекодировать оригиналы или текстуры. CameraInit
 VersionConflict новой GUI-версии сохраняется; не обновляйте node ради просмотра.
+
+Профиль launcher выбирает native Material при создании каждой mesh: штатный
+`Instantiator.objectAdded`, одна запись существующего `MeshLayer.shadingMode`.
+Это позволяет выбрать проверенный режим до first render, пока native Shading UI
+ещё disabled/loading. Позднейшие пользовательские Shaded/Material переключения
+сохраняются. Ни graph, ни loader, ни core-файлы не меняются. PBR отдельно не
+квалифицирован. Для сравнения при ограниченной памяти выгружайте предыдущую
+3D-модель; hide не означает unload. Обычный close/reopen тоже освобождает её.
 
 Передавать граф **выполненного продолжения** вместе с нужными результатами;
 исторический original сохраняется рядом. На отдельной копии штатно задайте cache

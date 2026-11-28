@@ -461,7 +461,11 @@ def prepare(args):
     module, runtime = init_runtime(args.meshroom)
     graph = module.Graph('reconstruction')
     filename = 'photogrammetry.mgt' if pipeline == 'standard' else 'photogrammetryLegacy.mgt'
-    template = args.meshroom.resolve() / 'aliceVision/share/meshroom' / filename
+    requested_template = getattr(args, 'template', None)
+    template = (Path(requested_template) if requested_template is not None else
+                args.meshroom.resolve() / 'aliceVision/share/meshroom' / filename).resolve(strict=True)
+    if not template.is_file() or template.suffix.lower() not in {'.mgt', '.mg'}:
+        raise ValueError('Native template must be a .mgt or .mg file')
     with module.GraphModification(graph):
         graph.initFromTemplate(str(template), keepOutputNodes=True)
         # Preserve the template. Native --toNode selects the computation endpoint.
@@ -484,7 +488,7 @@ def prepare(args):
                  'input_manifest': str(input_manifest), 'input_manifest_sha256': sha(input_manifest),
                  'settings_file': str(config_path), 'settings_sha256': sha(config_path),
                  'settings': config, 'scale': scale, 'project': str(project), 'cache': str(cache),
-                 'template_sha256': sha(template),
+                 'template_file': str(template), 'template_sha256': sha(template),
                  'sparse_node': node(graph, 'SfMExpanding' if pipeline == 'standard' else 'StructureFromMotion').name,
                  'dense_node': node(graph, 'Meshing').name,
                  'result_nodes': result_nodes(graph),
@@ -723,6 +727,7 @@ def main():
     item.add_argument('run', type=Path)
     item.add_argument('meshroom', type=Path)
     item.add_argument('--cache', type=Path, help='Explicit native cache for serial reuse by a new run; default RUN/cache')
+    item.add_argument('--template', type=Path, help='Explicit native .mgt/.mg template; default pinned pipeline template')
     item.set_defaults(function=prepare)
     for name, function in [('verify', verify), ('scale', scale), ('export', export)]:
         item = commands.add_parser(name)
