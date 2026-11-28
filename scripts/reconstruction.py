@@ -16,6 +16,7 @@ import subprocess
 from fetch_dataset import check_input_entries
 from check_marker_scale import markers_from_scene, verify_applied_baseline
 from capture_measurements import confirmed_scale, load_measurements
+from reconstruction_bundle import file_record, native_source, obj_bundle
 
 REPO = Path(__file__).resolve().parents[1]
 IDENTITY = [1., 0., 0., 0., 1., 0., 0., 0., 1.]
@@ -460,7 +461,11 @@ def prepare(args):
     module, runtime = init_runtime(args.meshroom)
     graph = module.Graph('reconstruction')
     filename = 'photogrammetry.mgt' if pipeline == 'standard' else 'photogrammetryLegacy.mgt'
-    template = args.meshroom.resolve() / 'aliceVision/share/meshroom' / filename
+    requested_template = getattr(args, 'template', None)
+    template = (Path(requested_template) if requested_template is not None else
+                args.meshroom.resolve() / 'aliceVision/share/meshroom' / filename).resolve(strict=True)
+    if not template.is_file() or template.suffix.lower() not in {'.mgt', '.mg'}:
+        raise ValueError('Native template must be a .mgt or .mg file')
     with module.GraphModification(graph):
         graph.initFromTemplate(str(template), keepOutputNodes=True)
         # Preserve the template. Native --toNode selects the computation endpoint.
@@ -483,7 +488,7 @@ def prepare(args):
                  'input_manifest': str(input_manifest), 'input_manifest_sha256': sha(input_manifest),
                  'settings_file': str(config_path), 'settings_sha256': sha(config_path),
                  'settings': config, 'scale': scale, 'project': str(project), 'cache': str(cache),
-                 'template_sha256': sha(template),
+                 'template_file': str(template), 'template_sha256': sha(template),
                  'sparse_node': node(graph, 'SfMExpanding' if pipeline == 'standard' else 'StructureFromMotion').name,
                  'dense_node': node(graph, 'Meshing').name,
                  'result_nodes': result_nodes(graph),
@@ -604,6 +609,111 @@ def export(args):
     write(root / 'effective-settings.json', effective)
 
 
+def _resolved_attribute(attr):
+    while attr.isLink:
+        attr = attr.inputLink
+    primitive = attr.getPrimitiveValue()
+    if isinstance(primitive, dict) and callable(getattr(attr, 'childAttribute', None)):
+        return {key: _resolved_attribute(attr.childAttribute(key)) for key in primitive}
+    if isinstance(primitive, list) and callable(getattr(attr, 'at', None)):
+        return [_resolved_attribute(attr.at(index)) for index in range(len(primitive))]
+    return attr.value
+
+
+def export_derived(args):
+    """Copy one explicit native derived result; raw export/scale bindings stay intact."""
+    root, effective, graph, _ = load(args.run)
+    selected = graph.node(args.node)
+    if selected is None or selected.nodeType not in {'MeshFiltering', 'Texturing'}:
+        raise ValueError('Select an existing native MeshFiltering or Texturing node')
+    if selected.globalStatus != 'SUCCESS':
+        raise ValueError(f'Derived export requires native SUCCESS, got {selected.globalStatus}')
+    output = outside(args.output)
+    if output.exists():
+        raise FileExistsError(f'Preserve previous derived export: {output}')
+    project = Path(effective['project']).resolve(strict=True)
+    serialized = selected.toDict()
+    saved = read(project)['graph'][selected.name]
+    # A loaded graph is not evidence that the project was saved after edits.
+    for field in ('nodeType', 'uid', 'inputs'):
+        if serialized.get(field) != saved.get(field):
+            raise ValueError(f'Save the native project before derived export: {selected.name}.{field}')
+    if not serialized.get('uid'):
+        raise ValueError('Derived native node needs its computed UID')
+    resolved = {group: {name: _resolved_attribute(selected.attribute(name))
+                        for name in serialized[group]}
+                for group in ('inputs', 'outputs')}
+    mesh = Path(selected.outputMesh.value).resolve(strict=True)
+    if mesh.suffix.lower() != '.obj':
+        raise ValueError('Derived export currently qualifies OBJ material bundles only; select outputMeshFileType=obj')
+    source_root = (Path(selected.output.value).resolve(strict=True)
+                   if selected.nodeType == 'Texturing' else mesh.parent)
+    if not mesh.is_relative_to(source_root):
+        raise ValueError('Native outputMesh is outside the selected output folder')
+    if source_root == output or source_root in output.parents:
+        raise ValueError('Derived destination must be outside native node output')
+    # File and material closure, including image decoding, precede any copying.
+    model_name = mesh.relative_to(source_root).as_posix()
+    inspected = obj_bundle(source_root, model_name, textured=selected.nodeType == 'Texturing',
+                           read_image=native_mask_size)
+    upstream = {}
+    for name in ('inputMesh', 'input', 'imagesFolder', 'inputRefMesh', 'normalsFolder'):
+        value = resolved['inputs'].get(name)
+        if value:
+            upstream[name] = native_source(value)
+    raw = native_source(node(graph, 'Meshing').outputMesh.value)
+    raw_binding = effective.get('mesh_export')
+    if raw_binding and raw_binding['sha256'] != raw['sha256']:
+        raise ValueError('Raw Meshing source differs from saved native export SHA-256')
+    # Preserve native linked outputs and their exact bytes. Texturing's wildcard
+    # outputTextures omits some normal/displacement maps, so copy the whole folder.
+    model_root = output / 'model'
+    if selected.nodeType == 'Texturing':
+        shutil.copytree(source_root, model_root)
+    else:
+        model_root.mkdir(parents=True)
+        names = {inspected['model']} | {item['target'] for item in inspected['references']}
+        for name in sorted(names):
+            destination = model_root / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source_root / name, destination)
+    bundle = obj_bundle(model_root, inspected['model'],
+                        textured=selected.nodeType == 'Texturing', read_image=native_mask_size)
+    expected_files = (inspected['files'] if selected.nodeType == 'Texturing' else
+                      [item for item in inspected['files'] if item['path'] in names])
+    if bundle['files'] != expected_files:
+        raise ValueError('Native output changed during copy; preserve derived export for diagnosis')
+    provenance = output / 'provenance'
+    provenance.mkdir()
+    snapshots = {}
+    for name, source in (('project.mg', project), ('effective-settings.json', root / 'effective-settings.json')):
+        destination = provenance / name
+        before = file_record(source)
+        shutil.copyfile(source, destination)
+        copied = file_record(destination)
+        if copied['sha256'] != before['sha256']:
+            raise ValueError('Provenance changed during copy; preserve derived export for diagnosis')
+        snapshots[name] = {**copied, 'path': 'provenance/' + name, 'source': before['path']}
+    receipt = {'schema_version': 1, 'kind': 'native_derived_mesh', 'run': str(root),
+               'runtime': effective['runtime'], 'scale': effective['scale'],
+               'node': {'name': selected.name, 'serialized': serialized, 'resolved': resolved,
+                        'native_status': selected.globalStatus},
+               'upstream': upstream, 'raw_meshing': raw,
+               'raw_export_sha256': raw_binding['sha256'] if raw_binding else None,
+               'source': {'folder': str(source_root), 'model': str(mesh),
+                          'files': inspected['files']},
+               'provenance': snapshots, 'bundle': bundle,
+               'coordinate_frame': {
+                   'convention': 'AliceVision d012d055 native OBJ writer (x,-y,-z) relative to SfM/cloud',
+                   'actual_geometry_validation': 'required separately against raw/cloud; convention is not a fitted alignment',
+                   'export_transform': None, 'bytes_preserved': True}}
+    receipt_path = output / 'derived-export.json'
+    write(receipt_path, receipt)
+    effective.setdefault('derived_exports', []).append(file_record(receipt_path))
+    write(root / 'effective-settings.json', effective)
+    print(json.dumps({'derived_receipt': str(receipt_path), 'model': str(model_root / bundle['model'])}))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -617,11 +727,17 @@ def main():
     item.add_argument('run', type=Path)
     item.add_argument('meshroom', type=Path)
     item.add_argument('--cache', type=Path, help='Explicit native cache for serial reuse by a new run; default RUN/cache')
+    item.add_argument('--template', type=Path, help='Explicit native .mgt/.mg template; default pinned pipeline template')
     item.set_defaults(function=prepare)
     for name, function in [('verify', verify), ('scale', scale), ('export', export)]:
         item = commands.add_parser(name)
         item.add_argument('run', type=Path)
         item.set_defaults(function=function)
+    item = commands.add_parser('export-derived', help='Copy an explicit computed MeshFiltering/Texturing result')
+    item.add_argument('run', type=Path)
+    item.add_argument('--node', required=True, help='Exact saved native node name')
+    item.add_argument('--output', type=Path, required=True, help='Fresh directory outside the checkout/cache')
+    item.set_defaults(function=export_derived)
     args = parser.parse_args()
     args.function(args)
 

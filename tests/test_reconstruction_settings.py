@@ -5,6 +5,8 @@ childAttribute and ListAttribute.at APIs. Actual pinned-bundle consumption is a
 separate native qualification, not simulated by these tests.
 """
 from copy import deepcopy
+from contextlib import nullcontext, redirect_stdout
+import io
 from pathlib import Path
 from types import SimpleNamespace
 import json
@@ -320,6 +322,94 @@ class NativeSettingsOrderTests(unittest.TestCase):
             self.assertEqual(plan['native_transforms'][0]['status'], 'prepared_not_computed')
             self.assertFalse(plan['native_transforms'][0]['inputs']['applyScale'])
             self.assertEqual(plan['native_transforms'][0]['inputs']['manualTransform']['manualRotation']['z'], 90.)
+
+
+class NativeTemplatePrepareTests(unittest.TestCase):
+    """Native graph loading is a storage boundary; prepare/configure remains real."""
+
+    def prepare_case(self, pipeline='standard', custom=False, compatibility=False):
+        temporary = tempfile.TemporaryDirectory(prefix='native-template-prepare-')
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name).resolve()
+        images = root / 'images'
+        images.mkdir()
+        files = []
+        for name in ('first.jpg', 'second.jpg'):
+            path = images / name
+            path.write_bytes(name.encode('ascii'))
+            files.append({'name': name, 'bytes': path.stat().st_size, 'sha256': r.sha(path)})
+        r.write(root / 'manifest.json', {'schema_version': 1, 'complete': True, 'files': files})
+        runtime = root / 'runtime'
+        bundled = runtime / 'aliceVision/share/meshroom' / (
+            'photogrammetry.mgt' if pipeline == 'standard' else 'photogrammetryLegacy.mgt')
+        r.write(bundled, {'graph': {}, 'case': 'bundled'})
+        template = root / 'custom.mg' if custom else bundled
+        if custom:
+            r.write(template, {'graph': {}, 'case': 'native-custom-with-decimate'})
+        graph = StoredGraph(pipeline)
+        filtering = StoredNode('MeshFiltering', outputMesh='filtered.obj')
+        texturing = StoredNode('Texturing', inputMesh=StoredAttribute(source=filtering.outputMesh))
+        graph.nodes.extend([StoredNode('SfMExpanding' if pipeline == 'standard' else 'StructureFromMotion'),
+                            StoredNode('Meshing'), filtering, texturing])
+        decimate = StoredNode('MeshDecimate', input=StoredAttribute(source=filtering.outputMesh),
+                              output='decimated.obj', simplificationFactor=1.)
+
+        def load_template(path, keepOutputNodes):
+            self.assertTrue(keepOutputNodes)
+            if r.read(path)['case'] == 'native-custom-with-decimate':
+                # Native initFromTemplate owns loading the chosen template's nodes/edges.
+                graph.nodes.append(decimate)
+                texturing.attrs['inputMesh'] = StoredAttribute(source=decimate.output)
+            for item in graph.nodes:
+                item.isCompatibilityNode = compatibility and item is decimate
+
+        graph.initFromTemplate = mock.Mock(side_effect=load_template)
+        graph.save = lambda path: r.write(path, {'nodes': {item.name: item.toDict() for item in graph.nodes}})
+        graph.setExplicitCacheDir = mock.Mock()
+        module = SimpleNamespace(Graph=lambda name: graph, GraphModification=lambda owner: nullcontext())
+        config = {'pipeline': pipeline, 'images': 'images', 'input_manifest': 'manifest.json',
+                  'resources': {'threads': 2}, 'nodes': {}, 'scale': {'mode': 'unknown'}}
+        if custom:
+            config['nodes']['MeshDecimate_1'] = {'simplificationFactor': .5}
+        settings = root / 'settings.json'
+        r.write(settings, config)
+        args = SimpleNamespace(settings=settings, run=root / 'run', meshroom=runtime)
+        if custom:
+            args.template = template
+        with mock.patch.object(r, 'init_runtime', return_value=(module, {'runtime': 'pinned-storage-boundary'})), \
+                redirect_stdout(io.StringIO()):
+            if compatibility:
+                with self.assertRaisesRegex(ValueError, 'compatibility nodes'):
+                    r.prepare(args)
+                self.assertFalse(args.run.exists())
+                return
+            r.prepare(args)
+        effective = r.read(args.run / 'effective-settings.json')
+        graph.initFromTemplate.assert_called_once_with(str(template.resolve()), keepOutputNodes=True)
+        self.assertEqual(effective['template_file'], str(template.resolve()))
+        self.assertEqual(effective['template_sha256'], r.sha(template))
+        self.assertEqual(r.read(args.run / 'project.mg')['nodes'], effective['nodes'])
+        self.assertEqual(graph.initializations, [45.])
+        r.verify_camera_inputs(graph.node('CameraInit_1'), [str(images / row['name']) for row in files])
+        self.assertEqual(graph.node('FeatureExtraction_1').maxThreads.value, 2)
+        if custom:
+            self.assertEqual(effective['nodes']['MeshDecimate_1']['inputs']['simplificationFactor'], .5)
+            self.assertIs(texturing.inputMesh.inputLink, decimate.output)
+            self.assertIs(decimate.input.inputLink, filtering.outputMesh)
+        else:
+            self.assertNotIn('MeshDecimate_1', effective['nodes'])
+            self.assertIs(texturing.inputMesh.inputLink, filtering.outputMesh)
+
+    def test_explicit_native_template_keeps_its_owner_nodes_edges_and_requested_parameters(self):
+        self.prepare_case(custom=True)
+
+    def test_default_templates_and_namespaces_without_template_remain_supported(self):
+        for pipeline in ('standard', 'legacy'):
+            with self.subTest(pipeline=pipeline):
+                self.prepare_case(pipeline=pipeline)
+
+    def test_custom_template_preserves_existing_native_compatibility_gate(self):
+        self.prepare_case(custom=True, compatibility=True)
 
 
 if __name__ == '__main__':
