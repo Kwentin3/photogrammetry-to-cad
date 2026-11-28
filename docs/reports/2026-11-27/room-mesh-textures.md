@@ -250,6 +250,8 @@ owner runtime archive; прежний вычислительный root отсу
 два verified derived meshes, units=unknown. Native raw mesh/cloud/scene SHA
 совпали с прежней выдачей. Новый контейнер/root удалены 28 ноября, см. выше.
 Независимая приёмка feature/data/GUI — PASS; source-scoped review final профиля — PASS.
-Остаются финальная публикация PR и уборка локальной рабочей копии. Текущее состояние и следующий шаг — в единственной записи
+Код и инструкции опубликованы в [PR #41](https://github.com/Kwentin3/photogrammetry-to-cad/pull/41).
+Уборка своей временной рабочей копии подтверждается после проверки remote head;
+текущее состояние и следующий шаг — в единственной записи
 [Goal](../../goal-40.md). Частные фото, mesh/cloud, raw logs и адреса доступа в Git
 не включены. CAD и точность изготовления не проверялись.
